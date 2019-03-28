@@ -29,6 +29,7 @@ def getKubeStr(user, id, kubeargstr, namespace, server):
     return cmd
 
 def doOper(user, id, kubeargs, namespace, server, capture_stdout=False):
+    #print("KARGS={0}".format(kubeargs))
     cmd = getKubeStr(user, id, utils.quoteJoinArgs(kubeargs), namespace, server)
     if capture_stdout:
         out = subprocess.run(cmd, stderr=PIPE, stdout=PIPE)
@@ -55,6 +56,7 @@ def doKubeOper(user, id, kubeargs, namespace=None, servers=None):
         serverInfo = utils.loadYaml("{0}/servers.yaml".format(cfgdir))
         servers = serverInfo["Servers"]
         servers = [re.sub('(.*):(.*)', '\g<1>:{0}'.format(serverInfo["k8sport"]), s) for s in servers]
+        #print("SERVERS: {0}".format(servers))
     doOperFn = lambda server : doOper(user, id, kubeargs, namespace, server, True)
     out = webutils.tryServers(servers, doOperFn, None)
     return out.stdout.decode(), out

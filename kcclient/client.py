@@ -138,6 +138,9 @@ def printResp(resp, verb, noun, output):
 
 
 def getJupyterEndPt(args):
+    if args.jsvc is None:
+        args.jsvc = args.jname.replace("pod", "svc")
+        args.jsvc = args.jname.replace("job", "svc")
     svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc/{0} -o yaml".format(args.jsvc).split())
     #print(yaml.load(svcDesc))
     port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
@@ -150,12 +153,24 @@ def getJupyterEndPt(args):
             endpt = [e+m.group(1) for e in endpt]
     print(endpt)
 
+def jobOper(args):
+    if args.jsvc is None:
+        args.jsvc = args.jname.replace("pod", "svc")
+        args.jsvc = args.jname.replace("job", "svc")
+    opers = [args.verb]
+    if args.output=='yaml':
+        opers.extend(["-o", "yaml"])
+    out, _ = kubeclient.doKubeOper(args.user, args.id, opers + ["pod", args.jname])
+    print(out)
+    out, _ = kubeclient.doKubeOper(args.user, args.id, opers + ["svc", args.jsvc])
+    print(out)
+
 if __name__ == "__main__":
     if sys.argv[1]=='kube':
         kubeclient.main(sys.argv[2:])
         exit()
     parser = argparse.ArgumentParser()
-    parser.add_argument("verb", choices=['login', 'get', 'create', 'delete', 'checktoken'])
+    parser.add_argument("verb", choices=['login', 'get', 'create', 'delete', 'describe', 'checktoken', 'endpt'])
     parser.add_argument("noun", nargs='?', default='')
     parser.add_argument("-s", "--server", default=None)
     parser.add_argument("--id", default=None)
@@ -165,9 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--status", choices=['approved', 'approvednq'], default=None)
     parser.add_argument("--cfg", default=None, help="Configuration to render file for submission")
     parser.add_argument("--endpt", action='store_true', help="Get job endpoint service")
-    parser.add_argument("--jendpt", action='store_true', help="Get Jupyter connection endpt")
-    parser.add_argument("--jname", help="JobName")
-    parser.add_argument("--jsvc", help="ServiceName")
+    parser.add_argument("--jname", default=None, help="Get Jupyter connection endpt of job")
+    parser.add_argument("--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     args = parser.parse_args()
     args.noun = args.noun.lower()
@@ -197,8 +211,10 @@ if __name__ == "__main__":
             port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
             if port is not None:
                 print(kcapi.serversWithPort(args.id, port, "http"))
-        elif args.verb == "get" and args.jendpt:
+        elif args.verb == "endpt" and args.jname is not None:
             getJupyterEndPt(args)
+        elif args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
+            jobOper(args)
         elif args.file is not None:
             for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.jobuser):
                 resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
