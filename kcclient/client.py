@@ -34,7 +34,7 @@ def apiOperJob(verb, noun, queryParams, data):
     if os.path.exists('{0}/.{1}/{2}/servers.yaml'.format(home, "kcluster", id)):
         servers = None # read from file
     else:
-        servers = os.environ["KC_APISERVERS"] # initial
+        servers = os.environ["KC_APISERVERS"].split(",") # initial list of servers
     return doAPIOper(servers, id, verb, noun, queryParams, data)
 
 def apiOperWithLogin(user, servers, id, verb, noun, queryParams, data):
