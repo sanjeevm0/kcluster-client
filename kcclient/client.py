@@ -92,9 +92,9 @@ def specIter(user, status, jobcfg, jobfile, jobuser):
         (queryParams, data) = argsToQuery(user, spec, status, jobcfg, jobfile, origspec, jobuser)
         yield (queryParams, data, spec)
 
-def fileIter(file, user, status, jobcfg, jobfile, jobuser):
+def fileIter(jobfile, user, status, jobcfg, jobuser):
     if jobfile is not None:
-        with open(file, 'r') as fp:
+        with open(jobfile, 'r') as fp:
             jobfilecontent = fp.read()
     else:
         jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"])
@@ -200,7 +200,7 @@ if __name__ == "__main__":
         elif args.verb == "get" and args.jendpt:
             getJupyterEndPt(args)
         elif args.file is not None:
-            for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.file, args.jobuser):
+            for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.jobuser):
                 resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
                 printResp(resp, args.verb, args.noun, args.output)
         else:
