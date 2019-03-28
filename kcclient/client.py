@@ -14,19 +14,10 @@ import re
 from kcapi import doAPIOper, getUser, getCtxId, argsToQuery
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
+sys.path.append(thisPath)
 import utils
 import oidclogin
 import webutils
-
-def dumpKubeCreds(user, resp, id):
-    cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
-    print("Writing {0} to {1}".format(resp, cfgdir))
-    with open('{0}/ca-kube.pem'.format(cfgdir), 'w') as fp:
-        fp.write(resp['CA'])
-    with open('{0}/{1}-kube.pem'.format(cfgdir, user), 'w') as fp:
-        fp.write(resp['Cert'])
-    with open('{0}/{1}-kube-key.pem'.format(cfgdir, user), 'w') as fp:
-        fp.write(resp['Key'])
 
 def apiOperJob(verb, noun, queryParams, data):
     home = utils.getHome()

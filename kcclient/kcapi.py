@@ -7,6 +7,7 @@ from functools import partial
 import glob
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
+sys.path.append(thisPath)
 import utils
 import webutils
 import re
@@ -39,6 +40,16 @@ def getCtxId(id, server):
             return os.path.basename(ctxdir[0])
     else:
         return None # id stays None
+
+def dumpKubeCreds(user, resp, id):
+    cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
+    print("Writing {0} to {1}".format(resp, cfgdir))
+    with open('{0}/ca-kube.pem'.format(cfgdir), 'w') as fp:
+        fp.write(resp['CA'])
+    with open('{0}/{1}-kube.pem'.format(cfgdir, user), 'w') as fp:
+        fp.write(resp['Cert'])
+    with open('{0}/{1}-kube-key.pem'.format(cfgdir, user), 'w') as fp:
+        fp.write(resp['Key'])
 
 def getServers(queryParams, server):
     resp = doAPIOper([server], None, "get", "servers", queryParams, None)
@@ -80,20 +91,20 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
     #if resp is not None:
     #    print(json.dumps(resp.json()))
 
-    if resp is not None and resp.status_code==200 and "verb"=="get":
-        if "noun"=="user":
+    if resp is not None and resp.status_code==200 and verb=="get":
+        if noun=="user":
             try:
                 user = resp.json()['User']
                 info = resp.json()['UserInfo']
                 utils.merge2Yaml("{0}/.kcluster/{1}/users.yaml".format(home, id), {user: info})
             except Exception:
                 print("Unable to get userinfo from {0}".format(resp.json()))
-        elif "noun"=="servers":
+        elif noun=="servers":
             id = resp.json()["ClusterID"]
             utils.mkdir("{0}/.{1}/{2}".format(home, "kcluster", id))            
-            webutils.dumpServers(resp.json(), "kcluster/{0}".format(id))
-        elif "noun"=="kubecred":
-            dumpKubeCreds(user, resp.json(), id)
+            webutils.dumpServers(resp, "kcluster/{0}".format(id))
+        elif noun=="kubecred":
+            dumpKubeCreds(resp.json()['user'], resp.json(), id)
 
     return resp
 
