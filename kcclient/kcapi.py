@@ -51,7 +51,7 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
     if servers is None:
         with open('{0}/.{1}/{2}/servers.yaml'.format(home, "kcluster", id)) as fp:
             servers = yaml.load(fp)["Servers"]
-    elif "noun" != "servers":
+    elif noun != "servers":
         resp = doAPIOper(servers, id, "get", "servers", queryParams, data)
         if resp.status_code!=200:
             return resp
