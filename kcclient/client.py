@@ -121,11 +121,16 @@ def replicate():
     (queryParams, data) = argsToQuery(None, spec, None, jobcfgcontent, jobfilecontent, origspec, None)
     apiOperJob("create", "job", queryParams, data)
 
-def printResp(resp, output):
+def printResp(resp, verb, noun, output):
     if output is None:
         print(json.dumps(resp.json()))
-    elif output=="yaml":
+    elif output=="simple" and verb=="get" and noun=="job":
+        print("{0:<20}{1:<20}".format("JOBNAME", "STATUS"))
+        for jobname in resp.json():
+            print("{0:<20}{1:<20}".format(jobname.split("/")[-1], resp.json()[jobname]['status']))
+    else:
         print(yaml.dump(resp.json()))
+
 
 def getJupyterEndPt(args):
     svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc/{0} -o yaml".format(args.jsvc).split())
@@ -158,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--jendpt", action='store_true', help="Get Jupyter connection endpt")
     parser.add_argument("--jname", help="JobName")
     parser.add_argument("--jsvc", help="ServiceName")
-    parser.add_argument("-o", "--output", choices=['yaml'], default=None)
+    parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     args = parser.parse_args()
     args.noun = args.noun.lower()
     if args.server is not None:
@@ -192,8 +197,8 @@ if __name__ == "__main__":
         elif args.file is not None:
             for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.file, args.jobuser):
                 resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
-                printResp(resp, args.output)
+                printResp(resp, args.verb, args.noun, args.output)
         else:
             (queryParams, data) = argsToQuery(user=args.user, jobuser=args.jobuser)
             resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
-            printResp(resp, args.output)
+            printResp(resp, args.verb, args.noun, args.output)

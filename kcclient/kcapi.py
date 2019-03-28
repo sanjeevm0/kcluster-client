@@ -14,10 +14,11 @@ import re
 
 def getUser(id, user):
     if user is None:
-        if id is None:
-            cfgfile = "{0}/.{1}/{1}.users.yaml".format(utils.getHome(), "kcluster")
-        else:
-            cfgfile = "{0}/.{1}/{2}/users.yaml".format(utils.getHome(), "kcluster", id)
+        cfgfile = "{0}/.{1}/{1}.users.yaml".format(utils.getHome(), "kcluster")
+        # if id is None:
+        #     cfgfile = "{0}/.{1}/{1}.users.yaml".format(utils.getHome(), "kcluster")
+        # else:
+        #     cfgfile = "{0}/.{1}/{2}/users.yaml".format(utils.getHome(), "kcluster", id)
         cfg = utils.loadYaml(cfgfile)
         if len(list(cfg)) > 1:
             print("User must be specified - one of {0}".format(list(cfg)))
