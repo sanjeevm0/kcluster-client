@@ -19,8 +19,10 @@ import utils
 import oidclogin
 import webutils
 
-def apiOperJob(verb, noun, queryParams, data):
+def apiOperJob(verb, noun, queryParams=None, data=None):
     home = utils.getHome()
+    if queryParams is None:
+        (queryParams, _) = argsToQuery()
     id = os.environ["KC_CLUSTERID"]
     if os.path.exists('{0}/.{1}/{2}/servers.yaml'.format(home, "kcluster", id)):
         servers = None # read from file
@@ -117,7 +119,10 @@ def replicate():
     spec = copy.deepcopy(origspec)
     modSpec(spec, {}, suffix)
     jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"])
-    jobcfgcontent = utils.b64d(os.environ["KC_JOBCFG"])
+    if "KC_JOBCFG" in os.environ:
+        jobcfgcontent = utils.b64d(os.environ["KC_JOBCFG"])
+    else:
+        jobcfgcontent = None
     (queryParams, data) = argsToQuery(None, spec, None, jobcfgcontent, jobfilecontent, origspec, None)
     apiOperJob("create", "job", queryParams, data)
 
