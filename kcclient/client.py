@@ -92,37 +92,43 @@ def specIter(user, status, jobcfg, jobfile, jobuser):
         (queryParams, data) = argsToQuery(user, spec, status, jobcfg, jobfile, origspec, jobuser)
         yield (queryParams, data, spec)
 
-def fileIter(jobfile, user, status, jobcfg, jobuser):
+def fileIter(jobfile, user, status, jobcfg, jobuser, jobcfgupdate=None):
     if jobfile is not None:
         with open(jobfile, 'r') as fp:
             jobfilecontent = fp.read()
     else:
         jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"])
     if jobcfg is not None:
-        jobcfgcontent = utils.loadYaml(jobcfg)
+        jobcfgcontent = utils.loadYaml(jobcfg) # a map
     elif "KC_JOBCFG" in os.environ:
-        jobcfgcontent = utils.b64d(os.environ["KC_JOBCFG"])
+        jobcfgcontent = utils.loadYaml(utils.b64d(os.environ["KC_JOBCFG"])) # a map
     else:
         jobcfgcontent = None
+    if jobcfgcontent is not None and jobcfgupdate is not None:
+        jobcfgcontent.update(jobcfgupdate)
     return specIter(user, status, jobcfgcontent, jobfilecontent, jobuser)
 
-def replicateAll():
-    for (queryParams, data, _) in fileIter(None, None, None, None, None):
+def replicateAll(jobcfgupdate=None):
+    for (queryParams, data, _) in fileIter(None, None, None, None, None, jobcfgupdate=jobcfgupdate):
         apiOperJob("create", "job", queryParams, data)
 
-def replicate():
+def replicate(specupdate=None, jobcfgupdate=None):
     (queryParams, data) = argsToQuery(None)
     suffix = "-" + utils.random_string(10)
     #spec = apiOperJob("get", "job/{0}".format(os.environ["KC_JOBNAME"]), queryParams, data).json()["spec"]
     #spec['metadata']['name'] += suffix
     origspec = yaml.load(utils.b64d(os.environ["KC_ORIGSPEC"]))
+    if specupdate is not None:
+        origspec.update(specupdate) # modify original
     spec = copy.deepcopy(origspec)
     modSpec(spec, {}, suffix)
-    jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"])
+    jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"]) # raw
     if "KC_JOBCFG" in os.environ:
-        jobcfgcontent = utils.b64d(os.environ["KC_JOBCFG"])
+        jobcfgcontent = yaml.load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
     else:
         jobcfgcontent = None
+    if jobcfgcontent is not None and jobcfgupdate is not None:
+        jobcfgcontent.update(jobcfgupdate)
     (queryParams, data) = argsToQuery(None, spec, None, jobcfgcontent, jobfilecontent, origspec, None)
     apiOperJob("create", "job", queryParams, data)
 

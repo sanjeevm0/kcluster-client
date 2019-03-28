@@ -44,7 +44,7 @@ def random_string_lud(length):
 def yaml_cmd(cmd):
     try:
         output = subprocess.check_output(cmd, shell=True)
-        return yaml.load(output)
+        return yaml.safe_load(output)
     except Exception:
         return None
 
@@ -364,7 +364,7 @@ def getCert(baseca, cn, hostnames, o, size=2048):
 def updateYaml(infile, updates):
     if os.path.exists(infile):
         with open(infile, 'r') as fp:
-            cur = yaml.load(fp)
+            cur = yaml.safe_load(fp)
     else:
         cur = {}
     cur.update(updates)
@@ -374,7 +374,7 @@ def updateYaml(infile, updates):
 def merge2Yaml(infile, updates):
     if os.path.exists(infile):
         with open(infile, 'r') as fp:
-            cur = yaml.load(fp)
+            cur = yaml.safe_load(fp)
     else:
         cur = {}
     cur = deepmerge2(cur, updates)
@@ -385,7 +385,7 @@ def merge2Yaml(infile, updates):
 def loadYaml(infile):
     try:
         with open(infile, 'r') as fp:
-            return yaml.load(fp)
+            return yaml.safe_load(fp)
     except Exception:
         return {}
 
@@ -396,7 +396,7 @@ def loadMYamlC(f):
         for y in ys:
             y = y.strip()
             if y != "":
-                yn = yaml.load(y)
+                yn = yaml.safe_load(y)
                 done = False
                 if 'kind' in yn and yn['kind'].lower()=='list':
                     if 'items' in yn:

@@ -134,7 +134,7 @@ def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None,
             'jobfile': jobfile # the raw file as string
         }
         if jobcfg is not None:
-            data['jobcfg'] = jobcfg # raw cfg file as string
+            data['jobcfg'] = jobcfg # a map
   
     return queryParams, data
 
