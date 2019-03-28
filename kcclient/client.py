@@ -8,13 +8,13 @@ import requests
 from functools import partial
 import copy
 from jinja2 import Template
-import kubeclient
-import kcapi
 import re
 from kcapi import doAPIOper, getUser, getCtxId, argsToQuery
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
 sys.path.append(thisPath)
+import kubeclient
+import kcapi
 import utils
 import oidclogin
 import webutils
