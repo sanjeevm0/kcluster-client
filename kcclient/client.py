@@ -145,7 +145,7 @@ def getJupyterEndPt(args):
     #print(yaml.load(svcDesc))
     port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
     if port is not None:
-        endpt = kcapi.serversWithPort(args.id, port, "http")
+        endpt = kcapi.serversWithPort(args.id, port, "https")
         joblog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(args.jname).split())
         #print(joblog)
         m = re.match('.*?http://.*(/\?token=.*?)(\s+|$)', " ".join(joblog.split()))
@@ -210,7 +210,7 @@ if __name__ == "__main__":
             #print(yaml.load(svcDesc))
             port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
             if port is not None:
-                print(kcapi.serversWithPort(args.id, port, "http"))
+                print(kcapi.serversWithPort(args.id, port, "https"))
         elif args.verb == "endpt" and args.jname is not None:
             getJupyterEndPt(args)
         elif args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
