@@ -13,8 +13,10 @@ import webutils
 import re
 
 def getUser(id, user):
-    if user is None:
+    if user is None:        
         cfgfile = "{0}/.{1}/{1}.users.yaml".format(utils.getHome(), "kcluster")
+        if not os.path.exists(cfgfile) and id is not None:
+            cfgfile = "{0}/.{1}/{2}/users.yaml".format(utils.getHome(), "kcluster", id)
         # if id is None:
         #     cfgfile = "{0}/.{1}/{1}.users.yaml".format(utils.getHome(), "kcluster")
         # else:
