@@ -44,6 +44,23 @@ def getCtxId(id, server):
     else:
         return None # id stays None
 
+def getCtx(id, user, server):
+    ctxFile = '{0}/.kcluster/context.yaml'.format(utils.getHome())
+    if os.path.exists(ctxFile):
+        ctx = utils.loadYaml(ctxFile)
+        return ctx['ClusterID'], ctx['User']
+    else:
+        id = getCtxId(id, server)
+        user = getUser(id, user)
+        return id, user
+
+def setCtx(id, user):
+    if user is not None and id is not None:
+        with open('{0}/.kcluster/context.yaml'.format(utils.getHome()), 'w') as fp:
+            yaml.dump({'ClusterID': id, 'User': user}, fp)
+    else:
+        print("Unable to determine id or user")
+
 def dumpKubeCreds(user, resp, id):
     cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
     print("Writing {0} to {1}".format(resp, cfgdir))

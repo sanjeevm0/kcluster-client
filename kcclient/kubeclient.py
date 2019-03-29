@@ -3,7 +3,7 @@ import sys
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
 sys.path.append(os.path.join(thisPath))
-from kcapi import doAPIOper, getUser, getCtxId, argsToQuery, getServers
+from kcapi import doAPIOper, getUser, getCtxId, argsToQuery, getServers, getCtx
 from subprocess import PIPE
 import argparse
 import utils
@@ -78,13 +78,12 @@ def main(argv):
     parser.add_argument("-n", "--namespace", default=None)
     args, remargs = parser.parse_known_args(argv)
 
-    args.id = getCtxId(args.id, None)
-    cfgdir = "{0}/.kcluster/{1}".format(utils.getHome(), args.id)
-    args.user = getUser(args.id, args.user)
+    (args.id, args.user) = getCtx(args.id, args.user, None)
 
     # move default config as it may conflict, register to remove
     moveExistConfig()
 
+    cfgdir = "{0}/.kcluster/{1}".format(utils.getHome(), args.id)
     serverInfo = utils.loadYaml("{0}/servers.yaml".format(cfgdir))
     servers = serverInfo["Servers"]
     servers = [re.sub('(.*):(.*)', '\g<1>:{0}'.format(serverInfo["k8sport"]), s) for s in servers]

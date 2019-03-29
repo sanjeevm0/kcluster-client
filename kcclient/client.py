@@ -12,7 +12,7 @@ import re
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
 sys.path.append(thisPath)
-from kcapi import doAPIOper, getUser, getCtxId, argsToQuery
+from kcapi import doAPIOper, getUser, getCtxId, argsToQuery, getCtx, setCtx
 import kubeclient
 import kcapi
 import utils
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         kubeclient.main(sys.argv[2:])
         exit()
     parser = argparse.ArgumentParser()
-    parser.add_argument("verb", choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'endpt'])
+    parser.add_argument("verb", nargs='?', choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'endpt'])
     parser.add_argument("noun", nargs='?', default='')
     parser.add_argument("-d", "--data", default=None)
     parser.add_argument("-s", "--server", default=None)
@@ -196,15 +196,23 @@ if __name__ == "__main__":
     parser.add_argument("-jname", "--jname", default=None, help="Get Jupyter connection endpt of job")
     parser.add_argument("-jsvc", "--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
+    parser.add_argument("-ctx", "--setcontext", action='store_true')
     args = parser.parse_args()
     args.noun = args.noun.lower()
     if args.server is not None:
         args.server = args.server.split(",") # an array of servers
-    args.id = getCtxId(args.id, args.server)
+    if args.verb == "login":
+        args.id = getCtxId(args.id, args.server)
+    else:
+        (args.id, args.user) = getCtx(args.id, args.user, args.server)
     if args.verb != "login":
         args.user = getUser(args.id, args.user)
     if args.data is not None:
         args.data = yaml.safe_load(args.data)
+
+    if args.setcontext:
+        setCtx(args.id, args.user)
+        exit()
 
     if args.verb == 'checktoken':
         print(webutils.decodeOIDCToken("kcluster", args.user))
