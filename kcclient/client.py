@@ -101,7 +101,7 @@ def fileIter(jobfile, user, status, jobcfg, jobuser, jobcfgupdate=None):
     if jobcfg is not None:
         jobcfgcontent = utils.loadYaml(jobcfg) # a map
     elif "KC_JOBCFG" in os.environ:
-        jobcfgcontent = utils.loadYaml(utils.b64d(os.environ["KC_JOBCFG"])) # a map
+        jobcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
     else:
         jobcfgcontent = None
     if jobcfgcontent is not None and jobcfgupdate is not None:
@@ -117,14 +117,14 @@ def replicate(specupdate=None, jobcfgupdate=None):
     suffix = "-" + utils.random_string(10)
     #spec = apiOperJob("get", "job/{0}".format(os.environ["KC_JOBNAME"]), queryParams, data).json()["spec"]
     #spec['metadata']['name'] += suffix
-    origspec = yaml.load(utils.b64d(os.environ["KC_ORIGSPEC"]))
+    origspec = yaml.safe_load(utils.b64d(os.environ["KC_ORIGSPEC"]))
     if specupdate is not None:
         origspec.update(specupdate) # modify original
     spec = copy.deepcopy(origspec)
     modSpec(spec, {}, suffix)
     jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"]) # raw
     if "KC_JOBCFG" in os.environ:
-        jobcfgcontent = yaml.load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
+        jobcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
     else:
         jobcfgcontent = None
     if jobcfgcontent is not None and jobcfgupdate is not None:
@@ -154,8 +154,8 @@ def getJupyterEndPt(args):
         args.jsvc = args.jname.replace("pod", "svc")
         args.jsvc = args.jname.replace("job", "svc")
     svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc/{0} -o yaml".format(args.jsvc).split())
-    #print(yaml.load(svcDesc))
-    port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
+    #print(yaml.safe_load(svcDesc))
+    port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
     if port is not None:
         endpt = kcapi.serversWithPort(args.id, port, "https")
         joblog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(args.jname).split())
@@ -219,8 +219,8 @@ if __name__ == "__main__":
             args.noun = "job"
         if args.verb == "get" and args.endpt:
             svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get {0} -o yaml".format(args.noun).split())
-            #print(yaml.load(svcDesc))
-            port = utils.getVal(yaml.load(svcDesc), 'spec.ports.[0].nodePort')
+            #print(yaml.safe_load(svcDesc))
+            port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
             if port is not None:
                 print(kcapi.serversWithPort(args.id, port, "https"))
         elif args.verb == "endpt" and args.jname is not None:

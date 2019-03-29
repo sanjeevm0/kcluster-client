@@ -66,6 +66,11 @@ def doKubeOperJob(kubeargsstr):
     user = getUser(id, None)
     doKubeOper(user, id, kubeargsstr.split())
 
+def doKubeOper2(user, id, kubeargsstr):
+    id = getCtxId(id, None)
+    user = getUser(id, user)
+    return doKubeOper(user, id, kubeargsstr.split())
+
 def main(argv):
     parser = argparse.ArgumentParser("kubectl.py")
     parser.add_argument("--id", default=None, help="Context ID of cluster to operate on")
