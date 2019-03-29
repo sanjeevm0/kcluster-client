@@ -519,6 +519,17 @@ def b64e(instr):
 def b64d(instr):
     return base64.b64decode(instr).decode()
 
+def msToTimeStr(timeMs, precision=10):
+    time = timeMs/1000
+    if time < 60:
+        return "{0}s".format(round(time, precision))
+    elif time < 60*60:
+        return "{0}m".format(round(time/60, precision))
+    elif time < 60*60*24:
+        return "{0}h".format(round(time/3600, precision))
+    else:
+        return "{0}d".format(round(time/3600/24, precision))
+
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
 # x2={'b':6, 'c': [1, 2], 'd':(3,4)}

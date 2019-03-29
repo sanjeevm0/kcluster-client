@@ -135,13 +135,19 @@ def replicate(specupdate=None, jobcfgupdate=None):
 def printResp(resp, verb, noun, output):
     if output is None:
         print(json.dumps(resp.json()))
-    elif output=="simple" and verb=="get" and noun=="job":
-        print("{0:<20}{1:<20}".format("JOBNAME", "STATUS"))
-        for jobname in resp.json():
-            print("{0:<20}{1:<20}".format(jobname.split("/")[-1], resp.json()[jobname]['status']))
+    elif output=="simple" and verb=="get" and noun.split('/')[0] in ['job', 'jobtree']:
+        resp = resp.json()
+        print("{0:<20}{1:<20}{2:<20}{3:<20}".format("JOBNAME", "STATUS", "AGE", "PARENT"))
+        for jobname in resp:
+            respjob = resp[jobname]
+            ageStr = utils.msToTimeStr(utils.timeInMs()-respjob['time'], 2)
+            if 'parent' in respjob:
+                parentStr = respjob['parent'].split('/')[-1]
+            else:
+                parentStr = "None"
+            print("{0:<20}{1:<20}{2:<20}{3:<20}".format(jobname.split("/")[-1], respjob['status'], ageStr, parentStr))
     else:
         print(yaml.dump(resp.json()))
-
 
 def getJupyterEndPt(args):
     if args.jsvc is None:
