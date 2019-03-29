@@ -85,6 +85,8 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
         reqFn = lambda req : requests.post(req, params=queryParams, json=data)
     elif verb=="delete":
         reqFn = lambda req : requests.delete(req, params=queryParams)
+    elif verb=="put":
+        reqFn = lambda req : requests.put(req, params=queryParams, json=data)
     else:
         print("Unknown verb {0} - noun {1}".format(verb, noun))
         exit()
@@ -111,9 +113,9 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
 
     return resp
 
-def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None, origspec=None, jobuser=None):
+def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None, origspec=None, jobuser=None, dataPut=None):
     queryParams = {}
-    data = None
+    data = dataPut
     if user is not None:
         home = utils.getHome()
         cfgfile = "{0}/.{1}/{1}.users.yaml".format(home, "kcluster")
@@ -128,11 +130,13 @@ def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None,
         queryParams['jobuser'] = jobuser
 
     if jobspec is not None:
-        data = {
+        if data is None:
+            data = {}
+        data.update({
             'spec': jobspec, # this job's spec - a map
             'origspec': origspec, # original spec without mods - a map
             'jobfile': jobfile # the raw file as string
-        }
+        })
         if jobcfg is not None:
             data['jobcfg'] = jobcfg # a map
   

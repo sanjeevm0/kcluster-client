@@ -33,13 +33,16 @@ def tryuntil(cmdLambda, stopFn, updateFn, waitPeriod=5):
             print("Not done yet - Sleep for 5 seconds and continue")
             time.sleep(waitPeriod)
 
+def random_string_l(length):
+    return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
+
 def random_string(length):
-  letters = string.ascii_lowercase + string.digits
-  return ''.join(random.choice(letters) for i in range(length))
+    letters = string.ascii_lowercase + string.digits
+    return ''.join(random.choice(letters) for i in range(length))
 
 def random_string_lud(length):
-  letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
-  return ''.join(random.choice(letters) for i in range(length))  
+    letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    return ''.join(random.choice(letters) for i in range(length))  
 
 def yaml_cmd(cmd):
     try:
