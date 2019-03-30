@@ -45,9 +45,9 @@ def doOper(user, id, kubeargs, namespace, server, capture_stdout=False):
 def moveExistConfig():
     home = utils.getHome()
     if os.path.exists("{0}/.kube/config".format(home)):
-        os.rename("{0}/.kube/config".format(home), "{0}/.kube/config_temp".format(home))
-        atexit.register(os.rename,
-                        "{0}/.kube/config_temp".format(home), "{0}/.kube/config".format(home))
+        tempname = "{0}/.kube/config_temp_{1}".format(home, utils.random_string(16))
+        os.rename("{0}/.kube/config".format(home), tempname)
+        atexit.register(os.rename, tempname, "{0}/.kube/config".format(home))
 
 def doKubeOper(user, id, kubeargs, namespace=None, servers=None):
     moveExistConfig()

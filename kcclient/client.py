@@ -184,6 +184,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("verb", nargs='?', choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'endpt'])
     parser.add_argument("noun", nargs='?', default='')
+    parser.add_argument("noun2", nargs='?', default=None)
     parser.add_argument("-d", "--data", default=None)
     parser.add_argument("-s", "--server", default=None)
     parser.add_argument("-id", "--id", default=None)
@@ -199,6 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("-ctx", "--setcontext", action='store_true')
     args = parser.parse_args()
     args.noun = args.noun.lower()
+    if args.noun2 is not None:
+        args.noun += "/"+args.noun2
     if args.server is not None:
         args.server = args.server.split(",") # an array of servers
     if args.verb == "login":
