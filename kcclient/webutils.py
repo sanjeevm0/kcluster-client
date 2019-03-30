@@ -14,7 +14,7 @@ oidc = {
     "google" : {
         "client_id": "385176144433-gn2ecc6k246hd8qb6opp90fhli7ng0mm.apps.googleusercontent.com",
         "client_secret": "WBYRGtJZ6VtZXbGHudvQxIke",
-        "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+        "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth?prompt=select_account",
         "token_uri": "https://www.googleapis.com/oauth2/v4/token"
     },
     "msft" : {

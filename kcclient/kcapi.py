@@ -44,9 +44,9 @@ def getCtxId(id, server):
     else:
         return None # id stays None
 
-def getCtx(id, user, server):
+def getCtx(id, user, server, setcontext=False):
     ctxFile = '{0}/.kcluster/context.yaml'.format(utils.getHome())
-    if os.path.exists(ctxFile):
+    if os.path.exists(ctxFile) and not setcontext:
         ctx = utils.loadYaml(ctxFile)
         return ctx['ClusterID'], ctx['User']
     else:

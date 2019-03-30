@@ -533,6 +533,13 @@ def msToTimeStr(timeMs, precision=10):
     else:
         return "{0}d".format(round(time/3600/24, precision))
 
+def isGPUMachine():
+    try:
+        lspci = getoutput('lspci')
+        return re.match(r'.*(3D|VGA compatible) controller: NVIDIA Corporation.*', " ".join(lspci.split())) is not None
+    except Exception:
+        return False
+
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
 # x2={'b':6, 'c': [1, 2], 'd':(3,4)}

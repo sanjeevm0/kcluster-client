@@ -204,7 +204,7 @@ if __name__ == "__main__":
     if args.verb == "login":
         args.id = getCtxId(args.id, args.server)
     else:
-        (args.id, args.user) = getCtx(args.id, args.user, args.server)
+        (args.id, args.user) = getCtx(args.id, args.user, args.server, args.setcontext)
     if args.verb != "login":
         args.user = getUser(args.id, args.user)
     if args.data is not None:
