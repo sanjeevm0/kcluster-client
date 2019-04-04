@@ -84,6 +84,7 @@ def specIter(user, status, jobcfg, jobfile, jobuser):
     else:
         specC = jobfile
     specs = utils.loadMYamlC(specC)
+    #print(specC)
     selectors = getServiceSelectors(specs)
     suffix = "-" + utils.random_string(10)
     for spec in specs:
@@ -150,25 +151,30 @@ def printResp(resp, verb, noun, output):
         print(yaml.dump(resp.json()))
 
 def getJupyterEndPt(args):
+    jname = args.noun.split('/')[1]
     if args.jsvc is None:
-        args.jsvc = args.jname.replace("pod", "svc")
-        args.jsvc = args.jname.replace("job", "svc")
+        args.jsvc = jname
+        args.jsvc = args.jsvc.replace("pod", "svc")
+        args.jsvc = args.jsvc.replace("job", "svc")
+    #print("JOB: {0}\nSVC: {1}".format(jname, args.jsvc))
     svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc/{0} -o yaml".format(args.jsvc).split())
     #print(yaml.safe_load(svcDesc))
     port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
     if port is not None:
         endpt = kcapi.serversWithPort(args.id, port, "https")
-        joblog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(args.jname).split())
+        joblog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(jname).split())
         #print(joblog)
         m = re.match('.*?http://.*(/\?token=.*?)(\s+|$)', " ".join(joblog.split()))
         if m is not None:
             endpt = [e+m.group(1) for e in endpt]
     print(endpt)
+    return endpt
 
 def jobOper(args):
     if args.jsvc is None:
-        args.jsvc = args.jname.replace("pod", "svc")
-        args.jsvc = args.jname.replace("job", "svc")
+        args.jsvc = args.jname
+        args.jsvc = args.jsvc.replace("pod", "svc")
+        args.jsvc = args.jsvc.replace("job", "svc")
     opers = [args.verb]
     if args.output=='yaml':
         opers.extend(["-o", "yaml"])
@@ -182,7 +188,7 @@ if __name__ == "__main__":
         kubeclient.main(sys.argv[2:])
         exit()
     parser = argparse.ArgumentParser()
-    parser.add_argument("verb", nargs='?', choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'endpt'])
+    parser.add_argument("verb", nargs='?', choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'browse'])
     parser.add_argument("noun", nargs='?', default='')
     parser.add_argument("noun2", nargs='?', default=None)
     parser.add_argument("-d", "--data", default=None)
@@ -193,8 +199,7 @@ if __name__ == "__main__":
     parser.add_argument("-jobuser", "--jobuser", default=None, help="Submit job on behalf of another user (for admins)")
     parser.add_argument("-status", "--status", choices=['approved', 'approvednq'], default=None)
     parser.add_argument("-cfg", "--cfg", default=None, help="Configuration to render file for submission")
-    parser.add_argument("-endpt", "--endpt", action='store_true', help="Get job endpoint service")
-    parser.add_argument("-jname", "--jname", default=None, help="Get Jupyter connection endpt of job")
+    parser.add_argument("-jname", "--jname", default=None, help="JobName")
     parser.add_argument("-jsvc", "--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     parser.add_argument("-ctx", "--setcontext", action='store_true')
@@ -231,14 +236,18 @@ if __name__ == "__main__":
     else:
         if args.verb == "create":
             args.noun = "job"
-        if args.verb == "get" and args.endpt:
-            svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get {0} -o yaml".format(args.noun).split())
+        if args.verb == "get" and args.noun.startswith("endpt/"):
+            #print("GETSVC: {0}".format(args.noun.split('/')[1]))
+            svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc {0} -o yaml".format(args.noun.split('/')[1]).split())
             #print(yaml.safe_load(svcDesc))
             port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
             if port is not None:
                 print(kcapi.serversWithPort(args.id, port, "https"))
-        elif args.verb == "endpt" and args.jname is not None:
-            getJupyterEndPt(args)
+        elif args.verb in ["get", "browse"] and args.noun.startswith("jendpt/"):
+            endpts = getJupyterEndPt(args)
+            if args.verb == "browse":
+                import webbrowser, random
+                webbrowser.open(random.choice(endpts), new=2)
         elif args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
             jobOper(args)
         elif args.file is not None:
