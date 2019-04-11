@@ -540,6 +540,11 @@ def isGPUMachine():
     except Exception:
         return False
 
+def linuxVer():
+    ver = " ".join(getoutput("lsb_release -a").split())
+    m = re.match(".*Description:\s+(.* LTS)", ver)
+    return m.group(1).strip()
+
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
 # x2={'b':6, 'c': [1, 2], 'd':(3,4)}
