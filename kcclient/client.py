@@ -19,7 +19,7 @@ import utils
 import oidclogin
 import webutils
 
-def apiOperJob(verb, noun, queryParams=None, data=None):
+def apiOperWork(verb, noun, queryParams=None, data=None):
     home = utils.getHome()
     if queryParams is None:
         (queryParams, _) = argsToQuery()
@@ -77,12 +77,12 @@ def modSpec(spec, serviceSelectors, suffix):
         if exist is not None:
             spec['metadata']['labels'][key0] += suffix
 
-def specIter(user, status, jobcfg, jobfile, jobuser):
-    if jobcfg is not None:
-        template = Template(jobfile)
-        specC = template.render(cnf=jobcfg)
+def specIter(user, status, workcfg, workfile, workuser):
+    if workcfg is not None:
+        template = Template(workfile)
+        specC = template.render(cnf=workcfg)
     else:
-        specC = jobfile
+        specC = workfile
     specs = utils.loadMYamlC(specC)
     #print(specC)
     selectors = getServiceSelectors(specs)
@@ -90,63 +90,63 @@ def specIter(user, status, jobcfg, jobfile, jobuser):
     for spec in specs:
         origspec = copy.deepcopy(spec)
         modSpec(spec, selectors, suffix)
-        (queryParams, data) = argsToQuery(user, spec, status, jobcfg, jobfile, origspec, jobuser)
+        (queryParams, data) = argsToQuery(user, spec, status, workcfg, workfile, origspec, workuser)
         yield (queryParams, data, spec)
 
-def fileIter(jobfile, user, status, jobcfg, jobuser, jobcfgupdate=None):
-    if jobfile is not None:
-        with open(jobfile, 'r') as fp:
-            jobfilecontent = fp.read()
+def fileIter(workfile, user, status, workcfg, workuser, workcfgupdate=None):
+    if workfile is not None:
+        with open(workfile, 'r') as fp:
+            workfilecontent = fp.read()
     else:
-        jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"])
-    if jobcfg is not None:
-        jobcfgcontent = utils.loadYaml(jobcfg) # a map
-    elif "KC_JOBCFG" in os.environ:
-        jobcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
+        workfilecontent = utils.b64d(os.environ["KC_WORKFILE"])
+    if workcfg is not None:
+        workcfgcontent = utils.loadYaml(workcfg) # a map
+    elif "KC_WORKCFG" in os.environ:
+        workcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_WORKCFG"])) # a map
     else:
-        jobcfgcontent = None
-    if jobcfgcontent is not None and jobcfgupdate is not None:
-        jobcfgcontent.update(jobcfgupdate)
-    return specIter(user, status, jobcfgcontent, jobfilecontent, jobuser)
+        workcfgcontent = None
+    if workcfgcontent is not None and workcfgupdate is not None:
+        workcfgcontent.update(workcfgupdate)
+    return specIter(user, status, workcfgcontent, workfilecontent, workuser)
 
-def replicateAll(jobcfgupdate=None):
-    for (queryParams, data, _) in fileIter(None, None, None, None, None, jobcfgupdate=jobcfgupdate):
-        apiOperJob("create", "job", queryParams, data)
+def replicateAll(workcfgupdate=None):
+    for (queryParams, data, _) in fileIter(None, None, None, None, None, workcfgupdate=workcfgupdate):
+        apiOperWork("create", "work", queryParams, data)
 
-def replicate(specupdate=None, jobcfgupdate=None):
+def replicate(specupdate=None, workcfgupdate=None):
     (queryParams, data) = argsToQuery(None)
     suffix = "-" + utils.random_string(10)
-    #spec = apiOperJob("get", "job/{0}".format(os.environ["KC_JOBNAME"]), queryParams, data).json()["spec"]
+    #spec = apiOperWork("get", "work/{0}".format(os.environ["KC_WORKNAME"]), queryParams, data).json()["spec"]
     #spec['metadata']['name'] += suffix
     origspec = yaml.safe_load(utils.b64d(os.environ["KC_ORIGSPEC"]))
     if specupdate is not None:
         origspec.update(specupdate) # modify original
     spec = copy.deepcopy(origspec)
     modSpec(spec, {}, suffix)
-    jobfilecontent = utils.b64d(os.environ["KC_JOBFILE"]) # raw
-    if "KC_JOBCFG" in os.environ:
-        jobcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_JOBCFG"])) # a map
+    workfilecontent = utils.b64d(os.environ["KC_WORKFILE"]) # raw
+    if "KC_WORKCFG" in os.environ:
+        workcfgcontent = yaml.safe_load(utils.b64d(os.environ["KC_WORKCFG"])) # a map
     else:
-        jobcfgcontent = None
-    if jobcfgcontent is not None and jobcfgupdate is not None:
-        jobcfgcontent.update(jobcfgupdate)
-    (queryParams, data) = argsToQuery(None, spec, None, jobcfgcontent, jobfilecontent, origspec, None)
-    apiOperJob("create", "job", queryParams, data)
+        workcfgcontent = None
+    if workcfgcontent is not None and workcfgupdate is not None:
+        workcfgcontent.update(workcfgupdate)
+    (queryParams, data) = argsToQuery(None, spec, None, workcfgcontent, workfilecontent, origspec, None)
+    apiOperWork("create", "work", queryParams, data)
 
 def printResp(resp, verb, noun, output):
     if output is None:
         print(json.dumps(resp.json()))
-    elif output=="simple" and verb=="get" and noun.split('/')[0] in ['job', 'jobtree']:
+    elif output=="simple" and verb=="get" and noun.split('/')[0] in ['work', 'worktree']:
         resp = resp.json()
-        print("{0:<20}{1:<20}{2:<20}{3:<20}".format("JOBNAME", "STATUS", "AGE", "PARENT"))
-        for jobname in resp:
-            respjob = resp[jobname]
-            ageStr = utils.msToTimeStr(utils.timeInMs()-respjob['time'], 2)
-            if 'parent' in respjob:
-                parentStr = respjob['parent'].split('/')[-1]
+        print("{0:<20}{1:<20}{2:<20}{3:<20}".format("WORKNAME", "STATUS", "AGE", "PARENT"))
+        for workname in resp:
+            respwork = resp[workname]
+            ageStr = utils.msToTimeStr(utils.timeInMs()-respwork['time'], 2)
+            if 'parent' in respwork:
+                parentStr = respwork['parent'].split('/')[-1]
             else:
                 parentStr = "None"
-            print("{0:<20}{1:<20}{2:<20}{3:<20}".format(jobname.split("/")[-1], respjob['status'], ageStr, parentStr))
+            print("{0:<20}{1:<20}{2:<20}{3:<20}".format(workname.split("/")[-1], respwork['status'], ageStr, parentStr))
     else:
         print(yaml.dump(resp.json()))
 
@@ -155,26 +155,26 @@ def getJupyterEndPt(args):
     if args.jsvc is None:
         args.jsvc = jname
         args.jsvc = args.jsvc.replace("pod", "svc")
-        args.jsvc = args.jsvc.replace("job", "svc")
-    #print("JOB: {0}\nSVC: {1}".format(jname, args.jsvc))
+        args.jsvc = args.jsvc.replace("work", "svc")
+    #print("WORK: {0}\nSVC: {1}".format(jname, args.jsvc))
     svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc/{0} -o yaml".format(args.jsvc).split())
     #print(yaml.safe_load(svcDesc))
     port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
     if port is not None:
         endpt = kcapi.serversWithPort(args.id, port, "https")
-        joblog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(jname).split())
-        #print(joblog)
-        m = re.match('.*?http://.*(/\?token=.*?)(\s+|$)', " ".join(joblog.split()))
+        worklog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(jname).split())
+        #print(worklog)
+        m = re.match('.*?http://.*(/\?token=.*?)(\s+|$)', " ".join(worklog.split()))
         if m is not None:
             endpt = [e+m.group(1) for e in endpt]
     print(endpt)
     return endpt
 
-def jobOper(args):
+def workOper(args):
     if args.jsvc is None:
         args.jsvc = args.jname
         args.jsvc = args.jsvc.replace("pod", "svc")
-        args.jsvc = args.jsvc.replace("job", "svc")
+        args.jsvc = args.jsvc.replace("work", "svc")
     opers = [args.verb]
     if args.output=='yaml':
         opers.extend(["-o", "yaml"])
@@ -196,10 +196,10 @@ if __name__ == "__main__":
     parser.add_argument("-id", "--id", default=None)
     parser.add_argument("-u", "--user", default=None)
     parser.add_argument("-f", "--file", default=None)
-    parser.add_argument("-jobuser", "--jobuser", default=None, help="Submit job on behalf of another user (for admins)")
+    parser.add_argument("-workuser", "--workuser", default=None, help="Submit work on behalf of another user (for admins)")
     parser.add_argument("-status", "--status", choices=['approved', 'approvednq'], default=None)
     parser.add_argument("-cfg", "--cfg", default=None, help="Configuration to render file for submission")
-    parser.add_argument("-jname", "--jname", default=None, help="JobName")
+    parser.add_argument("-jname", "--jname", default=None, help="WorkName")
     parser.add_argument("-jsvc", "--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     parser.add_argument("-ctx", "--setcontext", action='store_true')
@@ -235,7 +235,7 @@ if __name__ == "__main__":
             doAPIOper(args.server, args.id, "get", "kubecred", queryParams, data)
     else:
         if args.verb == "create":
-            args.noun = "job"
+            args.noun = "work"
         if args.verb == "get" and args.noun.startswith("endpt/"):
             #print("GETSVC: {0}".format(args.noun.split('/')[1]))
             svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc {0} -o yaml".format(args.noun.split('/')[1]).split())
@@ -249,12 +249,12 @@ if __name__ == "__main__":
                 import webbrowser, random
                 webbrowser.open(random.choice(endpts), new=2)
         elif args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
-            jobOper(args)
+            workOper(args)
         elif args.file is not None:
-            for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.jobuser):
+            for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.workuser):
                 resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
                 printResp(resp, args.verb, args.noun, args.output)
         else:
-            (queryParams, data) = argsToQuery(user=args.user, jobuser=args.jobuser, dataPut=args.data)
+            (queryParams, data) = argsToQuery(user=args.user, workuser=args.workuser, dataPut=args.data)
             resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
             printResp(resp, args.verb, args.noun, args.output)

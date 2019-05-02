@@ -130,7 +130,7 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
 
     return resp
 
-def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None, origspec=None, jobuser=None, dataPut=None):
+def argsToQuery(user=None, workspec=None, status=None, workcfg=None, workfile=None, origspec=None, workuser=None, dataPut=None):
     queryParams = {}
     data = dataPut
     if user is not None:
@@ -139,23 +139,23 @@ def argsToQuery(user=None, jobspec=None, status=None, jobcfg=None, jobfile=None,
         cfg = utils.loadYaml(cfgfile)
         queryParams['provider'] = cfg[user]['provider']
         queryParams['id_token'] = cfg[user]['tokens']['id_token']
-    else: # jobtoken
-        queryParams['job_token'] = os.environ["KC_JOBTOKEN"]
+    else: # worktoken
+        queryParams['work_token'] = os.environ["KC_WORKTOKEN"]
     if status is not None:
         queryParams['status'] = status
-    if jobuser is not None:
-        queryParams['jobuser'] = jobuser
+    if workuser is not None:
+        queryParams['workuser'] = workuser
 
-    if jobspec is not None:
+    if workspec is not None:
         if data is None:
             data = {}
         data.update({
-            'spec': jobspec, # this job's spec - a map
+            'spec': workspec, # this work's spec - a map
             'origspec': origspec, # original spec without mods - a map
-            'jobfile': jobfile # the raw file as string
+            'workfile': workfile # the raw file as string
         })
-        if jobcfg is not None:
-            data['jobcfg'] = jobcfg # a map
+        if workcfg is not None:
+            data['workcfg'] = workcfg # a map
   
     return queryParams, data
 

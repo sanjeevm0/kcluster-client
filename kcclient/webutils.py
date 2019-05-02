@@ -118,9 +118,9 @@ def addToken(req, cfg, user=None):
         'id_token': cfg[user]['tokens']['id_token']
     })
 
-def addJobToken(req, jobToken):
+def addWorkToken(req, workToken):
     return addQueryParams(req, {
-        'job_token': jobToken
+        'work_token': workToken
     })
 
 def dumpServers(resp, configLoc):

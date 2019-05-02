@@ -61,7 +61,7 @@ def doKubeOper(user, id, kubeargs, namespace=None, servers=None):
     out = webutils.tryServers(servers, doOperFn, None)
     return out.stdout.decode(), out
 
-def doKubeOperJob(kubeargsstr):
+def doKubeOperWork(kubeargsstr):
     id = getCtxId(None, None)
     user = getUser(id, None)
     doKubeOper(user, id, kubeargsstr.split())

@@ -287,13 +287,18 @@ def getMachineName():
 # files are src to dst pairs
 def copy_from_docker_image(image, files):
     try:
-        id = subprocess.check_output('sudo docker create {0}'.format(image), shell=True).decode('utf-8').strip()
+        if os.name != 'nt':
+            sudo = 'sudo'
+        else:
+            sudo = ''
+        os.system('{0} docker pull {1}'.format(sudo, image))
+        id = subprocess.check_output('{0} docker create {1}'.format(sudo, image), shell=True).decode('utf-8').strip()
         for src in files:
             dst = files[src]
-            copyCmd = "sudo docker cp --follow-link=true " + id + ":" + src + " " + dst
+            copyCmd = sudo + " docker cp --follow-link=true " + id + ":" + src + " " + dst
             #print copyCmd
             os.system(copyCmd)
-        os.system("sudo docker rm -v " + id)
+        os.system(sudo + " docker rm -v " + id)
     except Exception:
         pass
 
@@ -544,6 +549,15 @@ def linuxVer():
     ver = " ".join(getoutput("lsb_release -a").split())
     m = re.match(".*Description:\s+(.* LTS)", ver)
     return m.group(1).strip()
+
+def getContents(user, machine, file):
+    return getoutput("ssh -q {0}@{1} 'cat {2}'".format(user, machine, file))
+
+def setContents(user, machine, file, contents):
+    dir = os.path.dirname(file)
+    return getoutput("ssh {0}@{1} 'mkdir -p {2}; echo {3} > {4}'".format(
+        user, machine, dir, contents, file
+    ))
 
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
