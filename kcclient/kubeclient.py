@@ -64,7 +64,7 @@ def doKubeOper(user, id, kubeargs, namespace=None, servers=None):
 def doKubeOperWork(kubeargsstr):
     id = getCtxId(None, None)
     user = getUser(id, None)
-    doKubeOper(user, id, kubeargsstr.split())
+    return doKubeOper(user, id, kubeargsstr.split())
 
 def doKubeOper2(user, id, kubeargsstr):
     id = getCtxId(id, None)
