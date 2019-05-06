@@ -447,6 +447,13 @@ def mkdir(dir):
 def quoteJoinArgs(args):
     return " ".join(['"'+arg+'"' for arg in args])
 
+def splitUnquoteArgs(argStr):
+    args = argStr.split()
+    for i, _ in enumerate(args):
+        if args[i][0]=='"' and args[i][-1]=='"':
+            args[i] = args[i][1:-1]
+    return args
+
 # format of keys: spec.containers.[i].resources.limits.cpu, key is array
 def getValK(x, key):
     #print("X: {0}: K: {1}".format(x,key))

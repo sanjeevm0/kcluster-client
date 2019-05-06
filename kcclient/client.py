@@ -184,10 +184,10 @@ def workOper(args):
     print(out)
 
 if __name__ == "__main__":
-    if sys.argv[1]=='kube':
+    if len(sys.argv) > 1 and sys.argv[1]=='kube':
         kubeclient.main(sys.argv[2:])
         exit()
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser("client.py", description="RestAPI Client for KubeCluster -- use with 'kube' as first argument to run 'kubectl' commands on cluster")
     parser.add_argument("verb", nargs='?', choices=['login', 'get', 'put', 'create', 'delete', 'describe', 'checktoken', 'browse'])
     parser.add_argument("noun", nargs='?', default='')
     parser.add_argument("noun2", nargs='?', default=None)
@@ -195,11 +195,14 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--server", default=None)
     parser.add_argument("-id", "--id", default=None)
     parser.add_argument("-u", "--user", default=None)
-    parser.add_argument("-f", "--file", default=None)
+    parser.add_argument("-f", "--file", default=None, 
+        help=("Workload submission file, currently support 'Secret', 'ConfigMap', 'Pod', 'Deployment', 'Service' -- may be template "
+            "which is rendered using --cfg argument"))
     parser.add_argument("-workuser", "--workuser", default=None, help="Submit work on behalf of another user (for admins)")
-    parser.add_argument("-status", "--status", choices=['approved', 'approvednq'], default=None)
-    parser.add_argument("-cfg", "--cfg", default=None, help="Configuration to render file for submission")
-    parser.add_argument("-jname", "--jname", default=None, help="WorkName")
+    parser.add_argument("-status", "--status", choices=['approved', 'approvednq'], default=None,
+        help="Change status of job to approved or approvednq automatically (for admins)")
+    parser.add_argument("-cfg", "--cfg", default=None, help="Configuration to render file for submission - optional in case -f argument is template")
+    parser.add_argument("-jname", "--jname", default=None, help="WorkloadName")
     parser.add_argument("-jsvc", "--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     parser.add_argument("-ctx", "--setcontext", action='store_true')

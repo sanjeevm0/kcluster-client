@@ -32,9 +32,9 @@ def doOper(user, id, kubeargs, namespace, server, capture_stdout=False):
     #print("KARGS={0}".format(kubeargs))
     cmd = getKubeStr(user, id, utils.quoteJoinArgs(kubeargs), namespace, server)
     if capture_stdout:
-        out = subprocess.run(cmd, stderr=PIPE, stdout=PIPE)
+        out = subprocess.run(utils.splitUnquoteArgs(cmd), stderr=PIPE, stdout=PIPE)
     else:
-        out = subprocess.run(cmd, stderr=PIPE)
+        out = subprocess.run(utils.splitUnquoteArgs(cmd), stderr=PIPE)
     if "Unable to connect to the server" in out.stderr.decode():
         return None
     else:
@@ -72,7 +72,7 @@ def doKubeOper2(user, id, kubeargsstr):
     return doKubeOper(user, id, kubeargsstr.split())
 
 def main(argv):
-    parser = argparse.ArgumentParser("kubectl.py")
+    parser = argparse.ArgumentParser("kubectl.py", description="Run kubectl commands on cluster, any arguments not parsed here will be passed directly to kubectl")
     parser.add_argument("--id", default=None, help="Context ID of cluster to operate on")
     parser.add_argument("-u", "--user", default=None)
     parser.add_argument("-n", "--namespace", default=None)
