@@ -3,7 +3,7 @@ import sys
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(thisPath, '..', '..', 'utils'))
 sys.path.append(os.path.join(thisPath))
-from kcapi import doAPIOper, getUser, getCtxId, argsToQuery, getServers, getCtx
+from kcapi import doAPIOper, getUser, getCtxId, argsToQuery, getServers, getCtx, serversWithPort
 from subprocess import PIPE
 import argparse
 import utils
@@ -70,6 +70,28 @@ def doKubeOper2(user, id, kubeargsstr):
     id = getCtxId(id, None)
     user = getUser(id, user)
     return doKubeOper(user, id, kubeargsstr.split())
+
+def getKubeSvcEndPtPort(svcDesc):
+    ports = utils.getVal(svcDesc, 'spec.ports')
+    nodePort = -1
+    for port in ports:
+        endPtPort = utils.getVal(port, 'nodePort')
+        if endPtPort is not None:
+            nodePort = endPtPort
+        endPtName = utils.getVal(port, 'https')
+        if endPtName == 'https':
+            # break if https endpoint found
+            break
+    return nodePort 
+
+def getSvcEndpoint(user, id, svcName, namespace):
+    svcDesc, _ = doKubeOper(user, id, "get svc/{0} -o yaml -n {1}".format(svcName, namespace).split())
+    #print(yaml.safe_load(svcDesc))
+    port = getKubeSvcEndPtPort(yaml.safe_load(svcDesc))
+    if port is not None:
+        endpts = serversWithPort(id, port, "https")
+    print(endpts)
+    return endpts
 
 def main(argv):
     parser = argparse.ArgumentParser("kubectl.py", description="Run kubectl commands on cluster, any arguments not parsed here will be passed directly to kubectl")

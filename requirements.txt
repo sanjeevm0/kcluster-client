@@ -1,6 +1,6 @@
 etcd3>=0.8.1
 Jinja2>=2.10
-kubernetes>=8.0.1
+kubernetes==10.0.1
 pyjson>=1.1.1
 PyJWT>=1.7.1
 PyYAML>=3.13

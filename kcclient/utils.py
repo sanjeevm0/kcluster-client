@@ -534,6 +534,15 @@ def b64e(instr):
 def b64d(instr):
     return base64.b64decode(instr).decode()
 
+def b64efile(infile):
+    try:
+        with open(infile, 'r') as fp:
+            return b64e(fp.read().strip())
+    except Exception:
+        # try reading contents with sudo
+        contents = subprocess.check_output('sudo cat {0}'.format(infile), shell=True)
+        return b64e(contents.decode().strip())
+
 def msToTimeStr(timeMs, precision=10):
     time = timeMs/1000
     if time < 60:

@@ -64,6 +64,12 @@ def setCtx(id, user):
     else:
         print("Unable to determine id or user")
 
+def getKubeServers(cfgdir):
+    serverInfo = utils.loadYaml("{0}/servers.yaml".format(cfgdir))
+    servers = serverInfo["Servers"]
+    servers = [re.sub('(.*):(.*)', '\g<1>:{0}'.format(serverInfo["k8sport"]), s) for s in servers]
+    return servers
+
 def dumpKubeCreds(user, resp, id):
     cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
     print("Writing {0} to {1}".format(resp, cfgdir))
@@ -73,6 +79,42 @@ def dumpKubeCreds(user, resp, id):
         fp.write(resp['Cert'])
     with open('{0}/{1}-kube-key.pem'.format(cfgdir, user), 'w') as fp:
         fp.write(resp['Key'])
+    with open('{0}/{1}-kube.config'.format(cfgdir, user), 'w') as fp:
+        # create config file
+        cfg = {
+            'apiVersion': 'v1',
+            'kind': 'Config',
+            'clusters': [
+                {
+                    'name': 'default-cluster',
+                    'cluster': {
+                        'certificate-authority-data': utils.b64e(resp['CA']),
+                        'server': getKubeServers(cfgdir)[0]
+                    }
+                }
+            ],
+            'users': [
+                {
+                    'name': 'default-user',
+                    'user': {
+                        'client-certificate-data': utils.b64e(resp['Cert']),
+                        'client-key-data':  utils.b64e(resp['Key']),
+                        'token': resp['token']
+                    }
+                }
+            ],
+            'contexts': [
+                {
+                    'name': 'default-context',
+                    'context': {
+                        'cluster': 'default-cluster',
+                        'user': 'default-user'
+                    }
+                }
+            ],
+            'current-context': 'default-context'
+        }
+        yaml.safe_dump(cfg, fp)
 
 def getServers(queryParams, server):
     resp = doAPIOper([server], None, "get", "servers", queryParams, None)

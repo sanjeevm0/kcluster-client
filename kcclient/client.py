@@ -164,9 +164,9 @@ def getJupyterEndPt(args):
         endpt = kcapi.serversWithPort(args.id, port, "https")
         worklog, _ = kubeclient.doKubeOper(args.user, args.id, "logs pod/{0}".format(jname).split())
         #print(worklog)
-        m = re.match('.*?http://.*(/\?token=.*?)(\s+|$)', " ".join(worklog.split()))
+        m = re.match('.*?(http|https)://.*(/\?token=.*?)(\s+|$)', " ".join(worklog.split()))
         if m is not None:
-            endpt = [e+m.group(1) for e in endpt]
+            endpt = [e+m.group(2) for e in endpt]
     print(endpt)
     return endpt
 
@@ -239,25 +239,48 @@ if __name__ == "__main__":
     else:
         if args.verb == "create":
             args.noun = "work"
-        if args.verb == "get" and args.noun.startswith("endpt/"):
+
+        complete = False
+        if not complete and args.verb == "get" and args.noun.startswith("endpt/"):
             #print("GETSVC: {0}".format(args.noun.split('/')[1]))
             svcDesc, _ = kubeclient.doKubeOper(args.user, args.id, "get svc {0} -o yaml".format(args.noun.split('/')[1]).split())
             #print(yaml.safe_load(svcDesc))
             port = utils.getVal(yaml.safe_load(svcDesc), 'spec.ports.[0].nodePort')
             if port is not None:
                 print(kcapi.serversWithPort(args.id, port, "https"))
-        elif args.verb in ["get", "browse"] and args.noun.startswith("jendpt/"):
-            endpts = getJupyterEndPt(args)
+            complete = True
+
+        if not complete and args.verb in ["get", "browse"]:
+            if args.noun.startswith("jendpt/"):
+                endpts = getJupyterEndPt(args)
+                complete = True
+            elif args.noun == 'grafana':
+                endpts = kubeclient.getSvcEndpoint(args.user, args.id, 'nginx-grafana-nginx-ingress-controller', 'kube-system')
+                complete = True
+            elif args.noun == 'dashboard':
+                endpts = kubeclient.getSvcEndpoint(args.user, args.id, 'kubernetes-dashboard', 'kube-system')
+                complete = True
+            elif args.noun in ['prom', 'prometheus']:
+                endpts = kubeclient.getSvcEndpoint(args.user, args.id, 'nginx-prom-nginx-ingress-controller', 'kube-system')
+                complete = True
+            elif args.noun == 'linkerd':
+                endpts = kubeclient.getSvcEndpoint(args.user, args.id, 'nginx-linkerd-nginx-ingress-controller', 'linkerd')
+                complete = True
             if args.verb == "browse":
                 import webbrowser, random
                 webbrowser.open(random.choice(endpts), new=2)
-        elif args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
+
+        if not complete and args.verb in ['get', 'delete', 'describe'] and args.jname is not None:
             workOper(args)
-        elif args.file is not None:
+            complete = True
+
+        if not complete and args.file is not None:
             for (queryParams, data, _) in fileIter(args.file, args.user, args.status, args.cfg, args.workuser):
                 resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
                 printResp(resp, args.verb, args.noun, args.output)
-        else:
+            complete = True
+
+        if not complete:
             (queryParams, data) = argsToQuery(user=args.user, workuser=args.workuser, dataPut=args.data)
             resp = apiOperWithLogin(args.user, args.server, args.id, args.verb, args.noun, queryParams, data)
             printResp(resp, args.verb, args.noun, args.output)
