@@ -11,6 +11,8 @@ import shutil
 import threading
 from jinja2 import Environment, FileSystemLoader, Template
 import base64
+import hashlib
+
 thisPath = os.path.dirname(os.path.realpath(__file__))
 
 def tryuntil(cmdLambda, stopFn, updateFn, waitPeriod=5):
@@ -574,6 +576,23 @@ def setContents(user, machine, file, contents):
     return getoutput("ssh {0}@{1} 'mkdir -p {2}; echo {3} > {4}'".format(
         user, machine, dir, contents, file
     ))
+
+def kwargFilter(vars, **kwargs):
+    d = {}
+    rem = {}
+    for var in vars:
+        if var in kwargs:
+            d[var] = kwargs[var]
+    for k in kwargs:
+        if k not in vars:
+            rem[k] = kwargs[k]
+    return d, rem
+
+def kwargHash(**kwargs):
+    output = ""
+    for key, value in sorted(kwargs.items(), key=lambda x: x[0]): 
+        output += "{}:{}".format(key, value)
+    return hashlib.md5(output.encode()).hexdigest()
 
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}

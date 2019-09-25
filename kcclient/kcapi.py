@@ -50,8 +50,12 @@ def getCtx(id, user, server, setcontext=False):
         ctx = utils.loadYaml(ctxFile)
         if id is None:
             id = ctx['ClusterID']
+        else:
+            id = getCtxId(id, server)
         if user is None:
             user = ctx['User']
+        else:
+            user = getUser(id, user)
     else:
         id = getCtxId(id, server)
         user = getUser(id, user)
