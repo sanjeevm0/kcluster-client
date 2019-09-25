@@ -511,9 +511,9 @@ def setValK(x, key, v):
             x[key0] = _getNextSet(x[key0], key)
             setValK(x[key0], key, v)
 
-def setVal(x, key, v):
+def setVal(x, key, v, splitChar="."):
     x = _getNextSet(x, key)
-    setValK(x, key.strip().split("."), v)
+    setValK(x, key.strip().split(splitChar), v)
     return x
 
 class atomicInt():
