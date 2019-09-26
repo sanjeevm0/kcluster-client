@@ -477,8 +477,8 @@ def getValK(x, key):
         #print("X2: {0} K2: {1}".format(v, key))
         return getValK(v, key)
 
-def getVal(x, key):
-    return getValK(x, key.strip().split("."))
+def getVal(x, key, splitChar="."):
+    return getValK(x, key.strip().split(splitChar))
 
 def _getNextSet(x, key):
     if x is None:
