@@ -1,8 +1,9 @@
-import utils
-from kubernetes import client as kclient, config as kcfg, watch, utils as kutils
 import os
 import sys
+from kubernetes import client as kclient, config as kcfg, watch, utils as kutils
 thisPath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(thisPath)
+import utils
 import time
 import yaml
 import re
