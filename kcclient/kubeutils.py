@@ -292,6 +292,21 @@ def combineReqs(a, b):
     return output
     #return dict(Counter(a)+Counter(b))
 
+def maxReqs(a, b):
+    output = {}
+    keys = utils.unionKeys2(a, b)
+    for key in keys:
+        if key in a and key in b:
+            if isinstance(a[key], bool):
+                output[key] = a[key] or b[key]
+            else:
+                output[key] = max(a[key], b[key])
+        elif key in a:
+            output[key] = a[key]
+        else:
+            output[key] = b[key]
+    return output
+
 def negVal(x):
     return {key: -x[key] for key in x}
 
@@ -466,6 +481,40 @@ def getPodReqs(pod):
                 reqs['hostpath'] = 1
                 break
     return True, reqs
+
+def convertAll(x, prevSuccess=True):
+    if x is None:
+        return prevSuccess, {}
+    else:
+        newSuccess = prevSuccess
+        output = {}
+        for xKey in x:
+            (success, output[xKey]) = tryConvertUnit(x[xKey])
+            if not success:
+                newSuccess = False
+        return newSuccess, output
+
+# return requests and limits of pods, given 
+def totalPodReqs(pod):
+    reqs = {}
+    limits = {}
+    success = True
+    podC = utils.getValDef(pod, 'spec.containers')
+    for c in podC:
+        (success, reqsC) = convertAll(utils.getValDef(c, 'resources.requests'), success)
+        (success, limitsC) = convertAll(utils.getValDef(c, 'resources.limits'), success)
+        limitsC = maxReqs(limitsC, reqsC) # limits is max
+        reqs = combineReqs(reqs, reqsC)
+        limits = combineReqs(limits, limitsC)
+    podC = utils.getValDef(pod, 'spec.initContainers')
+    for c in podC:
+        (success, reqsC) = convertAll(utils.getValDef(c, 'resources.requests'), success)
+        (success, limitsC) = convertAll(utils.getValDef(c, 'resources.limits'), success)
+        limitsC = maxReqs(limitsC, reqsC)
+        reqs = maxReqs(reqs, reqsC)
+        limits = maxReqs(limits, limitsC)
+
+    return success, reqs, limits
 
 def getDeploymentReqs(dep):
     replicas = utils.getVal(dep, 'spec.replicas')

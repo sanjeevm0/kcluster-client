@@ -480,6 +480,13 @@ def getValK(x, key):
 def getVal(x, key, splitChar="."):
     return getValK(x, key.strip().split(splitChar))
 
+def getValDef(x, key, defVal={}, splitChar="."):
+    ret = getValK(x, key.strip().split(splitChar))
+    if ret is None:
+        return defVal
+    else:
+        return ret
+
 def _getNextSet(x, key):
     if x is None:
         if key[0][0]=='[' and key[0][-1]==']':
