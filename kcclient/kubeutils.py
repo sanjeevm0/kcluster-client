@@ -247,10 +247,14 @@ def _convertUnit(x):
     if m is None or len(m.groups()) < 2:
         raise (Exception('Invalid value')) # invalid value
     #return float(m.group(1)) * cnvtMul[m.group(2)]
-    if isinstance(cnvtMul[m.group(2)], float):
-        return float(m.group(1)) * cnvtMul[m.group(2)]
-    else:
-        return int(m.group(1)) * cnvtMul[m.group(2)]
+    if isinstance(cnvtMul[m.group(2)], int):
+        try:
+            i1 = int(m.group(1))
+            return i1 * cnvtMul[m.group(2)]
+        except Exception:
+            pass
+
+    return float(m.group(1)) * cnvtMul[m.group(2)]
 
 def tryConvertUnit(x):
     try:
