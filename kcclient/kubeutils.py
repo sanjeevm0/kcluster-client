@@ -222,7 +222,9 @@ def usertons(client, user):
         ns = nsOrig + "-" + utils.random_string(6)
     return (ns, existNs)
 
-cnvtRe = re.compile(r'([+-.\d]+)(.*)')
+#cnvtRe = re.compile(r'([+-.\d]+)(.*)')
+# Allow e or E for exponent provided numbers come after it
+cnvtRe = re.compile(r'([+-.\deE]+\d+|[+-.\d]+)(.*)')
 cnvtMul = {
     '': 1,
     'm': 0.001,
