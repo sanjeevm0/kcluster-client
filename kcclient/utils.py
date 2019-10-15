@@ -523,6 +523,62 @@ def setVal(x, key, v, splitChar="."):
     setValK(x, key.strip().split(splitChar), v)
     return x
 
+def addToVal(x, key, v, splitChar="."):
+    curVal = getValDef(x, key, 0, splitChar)
+    curVal += v
+    setVal(x, key, curVal, splitChar)
+
+def appendToVal(x, key, v, splitChar="."):
+    curVal = getValDef(x, key, [], splitChar)
+    curVal.append(v)
+    setVal(x, key, curVal, splitChar)
+
+def extendToVal(x, key, v, splitChar="."):
+    curVal = getValDef(x, key, [], splitChar)
+    curVal.extend(v)
+    setVal(x, key, curVal, splitChar)
+
+def updateToVal(x, key, v, splitChar="."):
+    curVal = getValDef(x, key, {}, splitChar)
+    curVal.update(v)
+    setVal(x, key, curVal, splitChar)
+
+def popFromVal(x, key, v, splitChar=".", defVal=[]):
+    if isinstance(v, list) and len(v)==0:
+        return None
+    if not isinstance(v, list):
+        v = [v]
+        vIsList = False
+    else:
+        vIsList = True
+    curVal = getVal(x, key, splitChar)
+    if curVal is None:
+        return None
+    elif isinstance(curVal, list):    
+        if not isinstance(defVal, list):
+            defVal = [defVal]
+            for _ in (1, range(len(v))):
+                defVal.append(defVal[0])
+        ret = []
+        curValOrig = copy.deepcopy(curVal)
+        for i in range(len(v)):
+            if i > 0 and v[i] <= v[i-1]:
+                setVal(x, key, curValOrig, splitChar)
+                raise Exception("Indices must be increasing")
+            if len(defVal) > 0 and (v[i]-i) >= len(curVal):
+                ret.append(defVal[i])
+            else:
+                ret.append(curVal.pop(v[i]-i))
+        return ret if vIsList else ret[0]
+    elif isinstance(curVal, dict):
+        ret = []
+        for key in v:
+            if not isinstance(defVal, list):
+                ret.append(curVal.pop(key, defVal))
+            else:
+                ret.append(curVal.pop(key))
+        return ret if vIsList else ret[0]
+
 class atomicInt():
     def __init__(self, initValue):
         self.val = initValue
