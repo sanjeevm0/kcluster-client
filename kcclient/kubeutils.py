@@ -93,6 +93,16 @@ def _loadCfgKclient(id, user):
     servers = [re.sub('(.*):(.*)', '\g<1>:{0}'.format(serverInfo["k8sport"]), s) for s in servers]
     return _loadCfgCert(random.choice(servers), ctxdir[0], "ca-kube.pem", "{0}-kube.pem".format(user), "{0}-kube-key.pem".format(user))
 
+def _loadCfgServiceAccount():
+    with open('/var/run/secrets/kubernetes.io/serviceaccount/token') as fp:
+        token = fp.read()
+    cfg = kclient.Configuration()
+    cfg.api_key['authorization'] = token
+    cfg.api_key_prefix['authorization'] = 'Bearer'
+    cfg.verify_ssl = False
+    cfg.host = "https://{0}:{1}".format(os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_PORT_443_TCP_PORT"])
+    return kclient.ApiClient(cfg)
+
 def createApiClient(deploydir, modssl_dir=False):
     try:
         _loadCfg(deploydir, modssl_dir)
@@ -146,8 +156,11 @@ def waitForKube(deploydir, modssl_dir=False):
 def waitForK(loader, creator):
     while True:
         try:
-            loader()
-            kubeclient = kclient.CoreV1Api()
+            ret = loader()
+            if ret is None:
+                kubeclient = kclient.CoreV1Api()
+            else:
+                kubeclient = kclient.CoreV1Api(ret)
         except Exception:
             kubeclient = None
         if isAlive(kubeclient):
@@ -168,7 +181,7 @@ def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, 
         elif id is not None:
             waitForK(lambda : _loadCfgKclient(id, user), lambda : None)
         else:
-            waitForK(lambda : None, lambda : None)
+            waitForK(lambda : _loadCfgServiceAccount(), lambda : None)
 
 def waitForK8s(**kwargs):
     clusterId = utils.kwargHash(**kwargs)
@@ -1226,17 +1239,26 @@ def kubeLock(client, lockName, podName, ns, numTry=0):
     #raise Exception("Invalid code path")
     #return False
 
-def getPodName(client, ns):
-    pods = client.list_namespaced_pod(namespace=ns)
-    info = utils.getMachineInfo()
-    for pod in pods:
-        if pod.status.podIP==info['private_ip']:
-            return pod.metadata.name
-    raise Exception("Unable to find pod name")
-    return None
+def getPodNs():
+    with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
+        return fp.read()
 
-def kubeLock1(client, lockName, ns, numTry=0):
-    podName = getPodName(client, ns)
+# def getPodName(client):
+#     ns = getPodNs()
+#     pods = client.list_namespaced_pod(namespace=ns)
+#     info = utils.getMachineInfo()
+#     for pod in pods:
+#         if pod.status.podIP==info['private_ip']:
+#             return pod.metadata.name
+#     raise Exception("Unable to find pod name")
+#     #return None
+
+def getPodName():
+    return os.environ["HOSTNAME"]
+
+def kubeLock1(lockName, numTry=0):
+    ns = getPodNs()
+    podName = getPodName()
+    clusterId = utils.kwargHash() # no arg hash
+    client = getClientForMethod(clusterId, 'list_namespaced_pod')
     return kubeLock(client, lockName, podName, ns, numTry)
-
-
