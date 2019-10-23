@@ -9,6 +9,13 @@ class ThreadFn (threading.Thread):
         self.args = args
         self.selfCtx = {}
         self.sharedCtx = sharedCtx
+        if "finisher" in self.sharedCtx:
+            self.sharedCtx["finisherLock"] = threading.lock()
+            self.sharedCtx["finisherRun"] = False
+        if 'finisherType' not in self.sharedCtx:
+            self.sharedCtx["finisherType"] = "ThreadFn"
+        self.type = "ThreadFn"
+        self.selfCtx['thread'] = self
 
     def run(self):
         print("Starting thread {0}".format(self.name))
@@ -18,6 +25,10 @@ class ThreadFn (threading.Thread):
             self.sharedCtx['finished'] = True
             raise e
         self.sharedCtx['finished'] = True
+        if self.type=="ThreadFn" and 'finisher' in self.selfCtx:
+            self.selfCtx['finisher'](self.selfCtx)
+        if self.sharedCtx["finisherType"]=="ThreadFn":
+            self.runSharedFinisher()
         print("Exiting thread {0}".format(self.name))
 
     def stop(self):
@@ -26,10 +37,19 @@ class ThreadFn (threading.Thread):
         else:
             return False
 
+    def runSharedFinisher(self):
+        if 'finisher' in self.sharedCtx:
+            with self.sharedCtx["finisherLock"]:
+                if not self.sharedCtx["finisherRun"]:
+                    self.sharedCtx["finisher"](self.sharedCtx)
+                    self.sharedCtx["finisherRun"] = True
+
 # Repeats fn if ret is True
 class ThreadFnR (ThreadFn):
     def __init__(self, threadID, name, sharedCtx, fn, *args):
         super(ThreadFnR,self).__init__(threadID, name, sharedCtx, fn, *args)
+        self.sharedCtx["finisherType"] = "ThreadFnR"
+        self.type = "ThreadFnR"
 
     def run(self):
         print("Starting thread {0}".format(self.name))
@@ -45,11 +65,19 @@ class ThreadFnR (ThreadFn):
             else:
                 print("REPEAT LOOP for {0}".format(self.name))
         self.sharedCtx['finished'] = True
+        if 'finisher' in self.selfCtx:
+            self.selfCtx['finisher'](self.selfCtx)
+        self.runSharedFinisher()
         print("Exiting thread {0}".format(self.name))
 
-    def getState(self):
+    def getState(self, key=None):
         if 'state' in self.selfCtx:
-            return self.selfCtx['state']
+            if key is None:
+                return self.selfCtx['state']
+            elif key in self.selfCtx['state']:
+                return self.selfCtx['state'][key]
+            else:
+                return None
         else:
             return None
 

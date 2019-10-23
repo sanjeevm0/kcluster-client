@@ -165,8 +165,10 @@ def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, 
             waitForK(lambda : _loadCfg(deploydir, modssl_dir), lambda : None)
         elif server is not None:
             waitForK(lambda : _loadCfgCert(server, base, ca, cert, key), lambda : None)
-        else:
+        elif id is not None:
             waitForK(lambda : _loadCfgKclient(id, user), lambda : None)
+        else:
+            waitForK(lambda : None, lambda : None)
 
 def waitForK8s(**kwargs):
     clusterId = utils.kwargHash(**kwargs)
@@ -610,12 +612,14 @@ def _getListerAndWatcher(fn, **kwargs):
 # stop = False
 # stopper = lambda : stop
 # printer = lambda event,obj,init : print("{0}:{1}:{2}".format(event,obj,init))
-# kubeutils.WatchObjThread(0, 'NodeWatcher', {}, printer, stopper, 'list_node', cluster_id=****)
-# kubeutils.WatchObjThread(1, 'Kube-System Pod Watcher', {}, printer, stopper, 'list_namespaced_pod', 'cluster_id'=****, namespace='kube-system')
+# kubeutils.WatchObjThread(0, 'NodeWatcher', {}, printer, stopper, 'list_node', None, cluster_id=****)
+# kubeutils.WatchObjThread(1, 'Kube-System Pod Watcher', {}, printer, stopper, 'list_namespaced_pod', None, 'cluster_id'=****, namespace='kube-system')
 # stop = True # to stop watching
-def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, **kwargs):
-    waitArgs, remArgs = utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user'], **kwargs)
-    if len(waitArgs) > 0:
+def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher, **kwargs):
+    waitArgs, remArgs = utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client'], **kwargs)
+    if 'client' in waitArgs:
+        clientMethod = eval('{0}.{1}'.format(waitArgs['client'], lister))
+    elif len(waitArgs) > 0:
         with clusterLock:
             clusterId = waitForK8s(**waitArgs)
             _, clientMethod = getClientForMethod(clusterId, lister, False)
@@ -626,6 +630,8 @@ def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, **kwar
         _, clientMethod = getClientForMethod(clusterId, lister, True)
     listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
+    if finisher is not None:
+        t.selfCtx['finisher'] = finisher
     t.daemon = True
     t.start()
     return t
@@ -654,6 +660,11 @@ def WatchNodesThreadClient(id, name, sharedCtx, clientFn, doFn, stopLoop=None):
     t.start()
     return t
 
+# To test:
+# import kubeutils
+# k = kubeutils.createClient('/home/core/deploy')
+# ctx = {'reqs' : {}}
+# kubeutils.watchNsPodsAndDo(k, 'sanjeevm0-hotmail-com', lambda type, pod, init : kubeutils.trackReqs(ctx, type, pod, init))
 def watchNsPodsAndDo(client, ns, doFn, stopLoop=None):
     listerFn = lambda : client.list_namespaced_pod(namespace=ns)
     watcherFn = lambda : _getWatchCtx(client.list_namespaced_pod, namespace=ns)
@@ -1069,9 +1080,163 @@ def getAdminPwd(kube):
 def getUserPwd(kube, ns):
     return hashlib.md5(getServiceToken(kube, ns, 'serviceaccount-'+ns).encode()).hexdigest()
 
-# To test:
-# import kubeutils
-# k = kubeutils.createClient('/home/core/deploy')
-# ctx = {'reqs' : {}}
-# kubeutils.watchNsPodsAndDo(k, 'sanjeevm0-hotmail-com', lambda type, pod, init : kubeutils.trackReqs(ctx, type, pod, init))
+# =======================================================================
+
+# obtain a lock for the pod using configmaps
+# resp=cc.patch_namespaced_config_map('testcmap', 'default', 
+#                                    [{"op": "test", "path": "/metadata/resourceVersion", "value": "5900202"}, 
+#                                     {"op": "replace", "path": "/data/podname", "value": "me400"}])
+# resp=cc.list_namespaced_config_map('default', field_selector='metadata.name==testcmap')
+
+def readConfigMap(client, configMapName, ns):
+    try:
+        resp = client.read_namespaced_config_map(configMapName, namespace=ns)
+        return resp
+    except Exception:
+        return None
+
+# returns True if successful in obtaining lock, otherwise False
+def createLockConfigMap(client, configMapName, podName, ns):
+    try:
+        # create a configmap
+        cm = kclient.V1ConfigMap()
+        cm.api_version = 'v1'
+        cm.kind = 'ConfigMap'
+        cm.metadata = kclient.V1ObjectMeta()
+        cm.metadata.namespace = ns
+        cm.metadata.name = configMapName
+        cm.data = {"lockholder": podName}
+        resp = client.create_namespaced_config_map(ns, cm)
+        return (True, resp) # this pod is now lock holder
+    except Exception:
+        return (False, readConfigMap(client, configMapName, ns))
+
+def updateLockConfigMap(client, configMapName, podName, podNameToDelete, ns):
+    try:
+        # JSON merge as opposed to strategic patch or json merge patch, check if podName is empty prior to setting
+        resp = client.patch_namespaced_config_map(configMapName, ns, [
+            {"op": "test", "path": "/data/lockholder", "value": ""},
+            {"op": "replace", "path": "/data/lockholder", "value": podName},
+        ])
+        return (True, resp)
+    except Exception:
+        if podNameToDelete is not None:
+            try:
+                resp = client.patch_namespaced_config_map(configMapName, ns, [
+                    {"op": "test", "path": "/data/lockholder", "value": podNameToDelete},
+                    {"op": "replace", "path": "/data/lockholder", "value": podName},
+                ])
+                return (True, resp)
+            except Exception:
+                return (False, readConfigMap(client, configMapName, ns))
+        else:
+            return (False, readConfigMap(client, configMapName, ns))
+
+def deleteLockConfigMap(client, configMapName, podNameToDelete, ns):
+    try:
+        resp = client.patch_namespaced_config_map(configMapName, ns, [
+            {"op": "test", "path": "/data/lockholder", "value": podNameToDelete},
+            {"op": "replace", "path": "/data/lockholder", "value": ""}
+        ])
+        return (True, resp)
+    except Exception:
+        return (False, readConfigMap(client, configMapName, ns))
+
+def configMapCallback(event, configMap, init, ctx):
+    if event in ["modified", "deleted"] and configMap.metadata.name == ctx['configMap']:
+        ctx['configMapChanged'] = True
+        ctx['stop'] = True
+        ctx['tryagain'].set()
+
+def podCallback(event, pod, init, ctx):
+    if event == "deleted" and pod.metadata.name == ctx['podName']:
+        ctx['podDeleted'] = True
+        ctx['stop'] = True
+        ctx['tryagain'].set()
+
+def stopCheck(ctx):
+    return ctx['stop'] or ('finished' in ctx and ctx['finished'])
+
+def finisher(ctx):
+    ctx['tryagain'].set()
+
+def kubeLock(client, lockName, podName, ns, numTry=0):
+    configMapName = "locks-{0}".format(lockName)
+    podNameToDelete = None
+    cnt = 0
+
+    # get config map
+    while True:
+        cnt += 1
+        # first read
+        resp = readConfigMap(client, configMapName, ns)
+        if resp is not None:
+            if resp.data['lockholder'] == podName:
+                return True # already have lock
+            else:
+                (success, resp) = updateLockConfigMap(client, configMapName, podName, podNameToDelete, ns)
+                if success:
+                    return True
+        else:
+            (success, resp) = createLockConfigMap(client, configMapName, podName, ns)
+            if success:
+                return True
+
+        if numTry > 0 and cnt >= numTry:
+            return False # lock not acquired
+
+        if resp is None or resp.data['lockholder']=="":
+            podNameToDelete = None
+            continue # next iteration
+
+        try:
+            curLockHolder = client.read_namespaced_pod(resp.data['lockholder'], namespace=ns)
+        except:
+            # Pod has been deleted
+            podNameToDelete = resp.data['lockholder']
+            continue
+
+        # start a watch
+        ctx = {
+            'stop': False,
+            'configMapChanged': False,
+            'podDeleted': False,
+            'tryagain': threading.Event()
+        }
+        cmCb = lambda event, obj, init : configMapCallback(event, obj, init, ctx)
+        podCb = lambda event, obj, init : podCallback(event, obj, init, ctx)
+        stopFn = lambda : stopCheck(ctx)
+
+        t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', finisher, client=client, namespace=ns,
+            field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10.0)
+        t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', finisher, client=client, namespace=ns,
+            field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), timeout_seconds=10.0)
+
+        ctx['tryagain'].wait()
+        watcher = t0.getState('watcher')
+        if watcher is not None:
+            watcher.stop()
+        watcher = t1.getState('watcher')
+        if watcher is not None:
+            watcher.stop()
+
+        if ctx['podDeleted']:
+            podNameToDelete = curLockHolder.metadata.name
+
+    #raise Exception("Invalid code path")
+    #return False
+
+def getPodName(client, ns):
+    pods = client.list_namespaced_pod(namespace=ns)
+    info = utils.getMachineInfo()
+    for pod in pods:
+        if pod.status.podIP==info['private_ip']:
+            return pod.metadata.name
+    raise Exception("Unable to find pod name")
+    return None
+
+def kubeLock1(client, lockName, ns, numTry=0):
+    podName = getPodName(client, ns)
+    return kubeLock(client, lockName, podName, ns, numTry)
+
 
