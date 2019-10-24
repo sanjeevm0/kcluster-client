@@ -211,6 +211,12 @@ def waitForK8s(**kwargs):
     (loaderRet, creatorRet) = _waitForK8sHelper(**kwargs)
     return (clusterId, loaderRet, creatorRet)
 
+def getClusterId(**kwargs):
+    clusterId = utils.kwargHash(**kwargs)
+    if clusterId not in cfgArgs:
+        cfgArgs[clusterId] = kwargs
+    return clusterId
+
 def deployAddon(deploydir, name):
     os.system("kubectl apply -f {0}/kubeaddons/{1} --validate=false".format(deploydir, name))
 
@@ -652,7 +658,7 @@ def _getListerAndWatcher(fn, **kwargs):
 def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher, **kwargs):
     waitArgs, remArgs = utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client'], **kwargs)
     if 'client' in waitArgs:
-        clientMethod = eval('{0}.{1}'.format(waitArgs['client'], lister))
+        clientMethod = eval("waitArgs['client'].{0}".format(lister))
     elif len(waitArgs) > 0:
         with clusterLock:
             (clusterId, loaderRet, _) = waitForK8s(**waitArgs)
@@ -1287,7 +1293,7 @@ def getPodName():
 def kubeLockAcquire(lockName, numTry=0):
     ns = getPodNs()
     podName = getPodName()
-    clusterId = utils.kwargHash() # no arg hash
+    clusterId = getClusterId() # no arg hash
     client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
     return kubeLockAcquire1(client, lockName, podName, ns, numTry)
 
@@ -1297,6 +1303,6 @@ def tryKubeLockAcquire(lockName):
 def kubeLockRelease(lockName):
     ns = getPodNs()
     podName = getPodName()
-    clusterId = utils.kwargHash()
+    clusterId = getClusterId()
     client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
     return kubeLockRelease1(client, lockName, podName, ns)
