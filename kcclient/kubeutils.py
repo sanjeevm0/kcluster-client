@@ -14,6 +14,8 @@ import random
 import glob
 import hashlib
 import threading
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 methods = {}
 clusters = {}
@@ -641,8 +643,10 @@ def _watchAndDo(thread, listerFn, watcherFn, doFn, stopLoop = lambda : False):
         done = doFn(e['type'].lower(), obj, False)
         if done:
             return
-    print("WATCH STOPS BYITSELF")
-    thread.selfCtx['repeat'] = True
+    if ('timeout_seconds' not in thread.selfCtx or
+        (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
+        print("WATCH STOPS BYITSELF - REPEAT LOOP")
+        thread.selfCtx['repeat'] = True
 
 def _getListerAndWatcher(fn, **kwargs):
     listerFn = lambda : fn(**kwargs)
@@ -675,6 +679,9 @@ def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finish
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
     if finisher is not None:
         t.selfCtx['finisher'] = finisher
+    if 'timeout_seconds' in kwargs:
+        t.selfCtx['timeout_seconds'] = kwargs['timeout_seconds']
+        t.selfCtx['thread_start_time'] = time.time()
     t.daemon = True
     t.start()
     return t
@@ -1255,6 +1262,8 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
         podCb = lambda event, obj, init : podCallback(event, obj, init, ctx)
         stopFn = lambda : stopCheck(ctx)
 
+        # to test thread:
+        # t0 = kubeutils.WatchObjThread(0, "kubeLock-cm", {}, lambda event, o, init: print(o.metadata.name) if o is not None else print("None"), lambda : False, 'list_namespaced_pod', None, client=client, namespace=ns, field_selector='metadata.name=={0}'.format(podName), timeout_seconds=10)
         t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', None, client=client, namespace=ns,
             field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10)
         t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', None, client=client, namespace=ns,
