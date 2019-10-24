@@ -141,6 +141,16 @@ def createBatchClient(deploydir, modssl_dir=False):
 def isAlive(client):
     try:
         return client is not None and client.list_node() is not None
+    except kclient.rest.ApiException as ex:
+        # check for forbidden
+        try:
+            ret = yaml.safe_load(ex.body)
+            if 'message' in ret and "forbidden" in ret['message'].lower():
+                return True
+            else:
+                return False
+        except Exception:
+            return False
     except Exception:
         return False
 
