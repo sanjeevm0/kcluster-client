@@ -1261,6 +1261,8 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
 
         if ctx['podDeleted']:
             podNameToDelete = curLockHolder.metadata.name
+        else:
+            podNameToDelete = None
 
     #raise Exception("Invalid code path")
     #return False
