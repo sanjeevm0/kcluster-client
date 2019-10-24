@@ -1245,9 +1245,22 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
 
         try:
             curLockHolder = client.read_namespaced_pod(resp.data['lockholder'], namespace=ns)
-        except:
-            # Pod has been deleted
-            podNameToDelete = resp.data['lockholder']
+        except kclient.rest.ApiException as ex:
+            try:
+                ret = yaml.safe_load(ex.body)
+                if 'message' in ret and "not found" in ret['message'].lower():
+                    # Pod has been deleted
+                    podNameToDelete = resp.data['lockholder']
+                    continue
+                else:
+                    # some other error
+                    podNameToDelete = None
+                    continue
+            except Exception:
+                podNameToDelete = None
+                continue
+        except Exception: # other error
+            podNameToDelete = None
             continue
 
         # start a watch
@@ -1255,6 +1268,8 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
             'stop': False,
             'configMapChanged': False,
             'podDeleted': False,
+            'configMap': resp.metadata.name,
+            'podName': resp.data['lockholder'],
             'tryagain': threading.Event(),
             'finisher': finisher,
         }
@@ -1265,9 +1280,11 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
         # to test thread:
         # t0 = kubeutils.WatchObjThread(0, "kubeLock-cm", {}, lambda event, o, init: print(o.metadata.name) if o is not None else print("None"), lambda : False, 'list_namespaced_pod', None, client=client, namespace=ns, field_selector='metadata.name=={0}'.format(podName), timeout_seconds=10)
         t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', None, client=client, namespace=ns,
-            field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10)
+            field_selector='metadata.name=={0}'.format(configMapName), 
+            timeout_seconds=10, resource_version=resp.metadata.resource_version)
         t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', None, client=client, namespace=ns,
-            field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), timeout_seconds=10)
+            field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), 
+            timeout_seconds=10, resource_version=curLockHolder.metadata.resource_version)
 
         ctx['tryagain'].wait()
         watcher = t0.getState('watcher')

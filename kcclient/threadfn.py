@@ -10,7 +10,7 @@ class ThreadFn (threading.Thread):
         self.selfCtx = {}
         self.sharedCtx = sharedCtx
         if "finisher" in self.sharedCtx:
-            self.sharedCtx["finisherLock"] = threading.lock()
+            self.sharedCtx["finisherLock"] = threading.Lock()
             self.sharedCtx["finisherRun"] = False
         if 'finisherType' not in self.sharedCtx:
             self.sharedCtx["finisherType"] = "ThreadFn"
@@ -37,6 +37,7 @@ class ThreadFn (threading.Thread):
         else:
             return False
 
+    # one run of shared finisher
     def runSharedFinisher(self):
         if 'finisher' in self.sharedCtx:
             with self.sharedCtx["finisherLock"]:
