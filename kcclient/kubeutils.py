@@ -639,9 +639,11 @@ def _watchAndDo(thread, listerFn, watcherFn, doFn, stopLoop = lambda : False):
         except Exception:
             pass
         if stopLoop():
+            w.stop()
             return
         done = doFn(e['type'].lower(), obj, False)
         if done:
+            w.stop()
             return
     if ('timeout_seconds' not in thread.selfCtx or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
