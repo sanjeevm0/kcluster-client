@@ -615,7 +615,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     initobjs = listerFn()
     init = {}
     for obj in initobjs.items:
-        init[obj.metadata.uid] = True
+        init[obj.metadata.uid] = obj
         if stopLoop():
             return
         done = doFn('added', obj, True)
@@ -632,7 +632,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         #raw = e['raw_object'] # accessible as map
         obj = e['object']
         try:
-            if obj.metadata.uid in init:
+            if e['type'].lower()=="added" and obj.metadata.uid in init and init[obj.metadata.uid].metadata.resource_version==obj.metadata.resource_version:
                 #print("Already processed: {0}".format(obj.metadata.uid))
                 init.pop(obj.metadata.uid)
                 continue
