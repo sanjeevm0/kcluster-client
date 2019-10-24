@@ -598,7 +598,10 @@ def hasParent(o):
 
 def _getWatchCtx(lister, **kwargs):
     w = watch.Watch()
-    watcher = w.stream(lister, timeout_seconds=0, **kwargs)
+    if 'timeout_seconds' not in kwargs:
+        watcher = w.stream(lister, timeout_seconds=0, **kwargs)
+    else:
+        watcher = w.stream(lister, **kwargs)
     return w, watcher
 
 def _watchAndDo(thread, listerFn, watcherFn, doFn, stopLoop = lambda : False):
@@ -1253,9 +1256,9 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
         stopFn = lambda : stopCheck(ctx)
 
         t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', None, client=client, namespace=ns,
-            field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10.0)
+            field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10)
         t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', None, client=client, namespace=ns,
-            field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), timeout_seconds=10.0)
+            field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), timeout_seconds=10)
 
         ctx['tryagain'].wait()
         watcher = t0.getState('watcher')
