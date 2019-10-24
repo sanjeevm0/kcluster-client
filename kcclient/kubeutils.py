@@ -606,7 +606,7 @@ def _getWatchCtx(lister, **kwargs):
         watcher = w.stream(lister, **kwargs)
     return w, watcher
 
-def _watchAndDo(thread, listerFn, watcherFn, doFn, stopLoop = lambda : False):
+def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
     if stopLoop is None:
         stopLoop = lambda : False
     if stopLoop():
@@ -647,7 +647,7 @@ def _watchAndDo(thread, listerFn, watcherFn, doFn, stopLoop = lambda : False):
             return
     if ('timeout_seconds' not in thread.selfCtx or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
-        print("WATCH STOPS BYITSELF - REPEAT LOOP")
+        print("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
         thread.selfCtx['repeat'] = True
 
 def _getListerAndWatcher(fn, **kwargs):
@@ -1283,10 +1283,10 @@ def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
         # t0 = kubeutils.WatchObjThread(0, "kubeLock-cm", {}, lambda event, o, init: print(o.metadata.name) if o is not None else print("None"), lambda : False, 'list_namespaced_pod', None, client=client, namespace=ns, field_selector='metadata.name=={0}'.format(podName), timeout_seconds=10)
         t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', None, client=client, namespace=ns,
             field_selector='metadata.name=={0}'.format(configMapName), 
-            timeout_seconds=10, resource_version=resp.metadata.resource_version)
+            timeout_seconds=10) # resource_version=resp.metadata.resource_version) - using resource version has unexpected behavior
         t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', None, client=client, namespace=ns,
             field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), 
-            timeout_seconds=10, resource_version=curLockHolder.metadata.resource_version)
+            timeout_seconds=10) # resource_version=curLockHolder.metadata.resource_version)
 
         ctx['tryagain'].wait()
         watcher = t0.getState('watcher')
