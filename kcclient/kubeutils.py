@@ -30,16 +30,21 @@ def _findMethodElem(method):
             break
     return methods[method]
 
-def getClientForMethod(clusterId, method, reloadConfig=True):
+def getClientForMethod(clusterId, method, reloadConfig=True, loaderIn=None):
     with clusterLock:
         apiObj = utils.getValK(apiObjs, [clusterId, method])
         if apiObj is not None:
             return apiObj
         else:
             if reloadConfig:
-                waitForK8s(**cfgArgs[clusterId])
+                (_, loader, _) = waitForK8s(**cfgArgs[clusterId])
+            else:
+                loader = loaderIn
             elem = _findMethodElem(method)
-            client = eval(elem+'()') # an instance of the class
+            if loader is None:
+                client = eval(elem+'()') # an instance of the class
+            else:
+                client = eval("{0}(loader)".format(elem))
             methodFn = eval('client.'+method) # a function in the instantiated class
             utils.setValK(apiObjs, [clusterId, method], (client, methodFn))
             return client, methodFn
@@ -163,42 +168,48 @@ def waitForKube(deploydir, modssl_dir=False):
         time.sleep(5.0)
     return kclient
 
-def waitForK(loader, creator):
+def waitForK(loader, creator=None):
+    loaderRet = None
     while True:
         try:
             ret = loader()
             if ret is None:
                 kubeclient = kclient.CoreV1Api()
             else:
+                loaderRet = ret
                 kubeclient = kclient.CoreV1Api(ret)
         except Exception:
             kubeclient = None
         if isAlive(kubeclient):
             break
         time.sleep(5.0)
-    return creator()
+    if creator is None:
+        return (loaderRet, None)
+    else:
+        return (loaderRet, creator(loaderRet))
 
 def waitForKClient(id, user):
     #print("ID: {0} USER: {1}".format(id, user))
-    return waitForK(lambda : _loadCfgKclient(id, user), lambda : kclient.CoreV1Api())
+    (_, created) = waitForK(lambda : _loadCfgKclient(id, user), kclient.CoreV1Api)
+    return created
 
 def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, ca=None, cert=None, key=None, id=None, user=None):
     with clusterLock:
         if deploydir is not None:
-            waitForK(lambda : _loadCfg(deploydir, modssl_dir), lambda : None)
+            return waitForK(lambda : _loadCfg(deploydir, modssl_dir))
         elif server is not None:
-            waitForK(lambda : _loadCfgCert(server, base, ca, cert, key), lambda : None)
+            return waitForK(lambda : _loadCfgCert(server, base, ca, cert, key))
         elif id is not None:
-            waitForK(lambda : _loadCfgKclient(id, user), lambda : None)
+            return waitForK(lambda : _loadCfgKclient(id, user))
         else:
-            waitForK(lambda : _loadCfgServiceAccount(), lambda : None)
+            return waitForK(lambda : _loadCfgServiceAccount())
 
 def waitForK8s(**kwargs):
     clusterId = utils.kwargHash(**kwargs)
     if clusterId not in cfgArgs:
         cfgArgs[clusterId] = kwargs # save the mapping for waiting
-    _waitForK8sHelper(**kwargs)
-    return clusterId
+    (loaderRet, creatorRet) = _waitForK8sHelper(**kwargs)
+    return (clusterId, loaderRet, creatorRet)
 
 def deployAddon(deploydir, name):
     os.system("kubectl apply -f {0}/kubeaddons/{1} --validate=false".format(deploydir, name))
@@ -644,8 +655,8 @@ def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finish
         clientMethod = eval('{0}.{1}'.format(waitArgs['client'], lister))
     elif len(waitArgs) > 0:
         with clusterLock:
-            clusterId = waitForK8s(**waitArgs)
-            _, clientMethod = getClientForMethod(clusterId, lister, False)
+            (clusterId, loaderRet, _) = waitForK8s(**waitArgs)
+            _, clientMethod = getClientForMethod(clusterId, lister, False, loaderRet)
         remArgs.pop('cluster_id', None) # ignore and remove if it exists
     else:
         clusterId = remArgs.pop('cluster_id') # raise error if not found
@@ -1270,5 +1281,5 @@ def kubeLock1(lockName, numTry=0):
     ns = getPodNs()
     podName = getPodName()
     clusterId = utils.kwargHash() # no arg hash
-    client = getClientForMethod(clusterId, 'list_namespaced_pod')
+    client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
     return kubeLock(client, lockName, podName, ns, numTry)
