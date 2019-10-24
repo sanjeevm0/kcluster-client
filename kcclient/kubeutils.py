@@ -1194,7 +1194,11 @@ def stopCheck(ctx):
 def finisher(ctx):
     ctx['tryagain'].set()
 
-def kubeLock(client, lockName, podName, ns, numTry=0):
+def kubeLockRelease1(client, lockName, podName, ns):
+    configMapName = "locks-{0}".format(lockName)
+    deleteLockConfigMap(client, configMapName, podName, ns)
+
+def kubeLockAcquire1(client, lockName, podName, ns, numTry=0):
     configMapName = "locks-{0}".format(lockName)
     podNameToDelete = None
     cnt = 0
@@ -1235,15 +1239,16 @@ def kubeLock(client, lockName, podName, ns, numTry=0):
             'stop': False,
             'configMapChanged': False,
             'podDeleted': False,
-            'tryagain': threading.Event()
+            'tryagain': threading.Event(),
+            'finisher': finisher,
         }
         cmCb = lambda event, obj, init : configMapCallback(event, obj, init, ctx)
         podCb = lambda event, obj, init : podCallback(event, obj, init, ctx)
         stopFn = lambda : stopCheck(ctx)
 
-        t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', finisher, client=client, namespace=ns,
+        t0 = WatchObjThread(cnt, "kubeLock-cm", ctx, cmCb, stopFn, 'list_namespaced_config_map', None, client=client, namespace=ns,
             field_selector='metadata.name=={0}'.format(configMapName), timeout_seconds=10.0)
-        t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', finisher, client=client, namespace=ns,
+        t1 = WatchObjThread(cnt, "kubeLock-pod", ctx, podCb, stopFn, 'list_namespaced_pod', None, client=client, namespace=ns,
             field_selector='metadata.name=={0}'.format(curLockHolder.metadata.name), timeout_seconds=10.0)
 
         ctx['tryagain'].wait()
@@ -1277,9 +1282,19 @@ def getPodNs():
 def getPodName():
     return os.environ["HOSTNAME"]
 
-def kubeLock1(lockName, numTry=0):
+def kubeLockAcquire(lockName, numTry=0):
     ns = getPodNs()
     podName = getPodName()
     clusterId = utils.kwargHash() # no arg hash
     client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
-    return kubeLock(client, lockName, podName, ns, numTry)
+    return kubeLockAcquire1(client, lockName, podName, ns, numTry)
+
+def tryKubeLockAcquire(lockName):
+    return kubeLockAcquire(lockName, numTry=1)
+
+def kubeLockRelease(lockName):
+    ns = getPodNs()
+    podName = getPodName()
+    clusterId = utils.kwargHash()
+    client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
+    return kubeLockRelease1(client, lockName, podName, ns)
