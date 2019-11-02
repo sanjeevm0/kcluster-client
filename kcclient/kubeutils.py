@@ -8,14 +8,19 @@ import time
 import yaml
 import re
 import copy
-from threadfn import ThreadFnR
+from threadfn import ThreadFn, ThreadFnR
 import tempfile
 import random
 import glob
 import hashlib
 import threading
 import urllib3
+from collections import deque
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+import log
+import logging
+logger = log.start_log("{0}/logs/kubeutils.log".format(utils.getHome()), logging.DEBUG, logging.INFO, 'w', 'kubelog')
 
 methods = {}
 clusters = {}
@@ -87,8 +92,10 @@ def _loadCfgCert(server, base, ca, cert, key):
         "cert": "{0}/{1}".format(base, cert),
         "key": "{0}/{1}".format(base, key)
     })
-    kcfg.load_kube_config(tmp)
-    os.remove(tmp)
+    try:
+        kcfg.load_kube_config(tmp)
+    finally:
+        os.remove(tmp)
 
 # Load CFG from a Kcluster client
 def _loadCfgKclient(id, user):
@@ -206,17 +213,23 @@ def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, 
         else:
             return waitForK(lambda : _loadCfgServiceAccount())
 
+def getClusterArgs(**kwargs):
+    clientArgs, _ = getClientArgs(**kwargs)
+    clientArgs.pop('client', None)
+    clientArgs.pop('cluster_id', None)
+    return clientArgs
+
 def waitForK8s(**kwargs):
-    clusterId = utils.kwargHash(**kwargs)
-    if clusterId not in cfgArgs:
-        cfgArgs[clusterId] = kwargs # save the mapping for waiting
-    (loaderRet, creatorRet) = _waitForK8sHelper(**kwargs)
+    clusterId = getClusterId(**kwargs)
+    clusterArgs = getClusterArgs(**kwargs)
+    (loaderRet, creatorRet) = _waitForK8sHelper(**clusterArgs)
     return (clusterId, loaderRet, creatorRet)
 
 def getClusterId(**kwargs):
-    clusterId = utils.kwargHash(**kwargs)
+    clusterArgs = getClusterArgs(**kwargs)
+    clusterId = utils.kwargHash(**clusterArgs)
     if clusterId not in cfgArgs:
-        cfgArgs[clusterId] = kwargs
+        cfgArgs[clusterId] = clusterArgs # save the mapping for waiting
     return clusterId
 
 def deployAddon(deploydir, name):
@@ -612,7 +625,11 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     if stopLoop():
         return
     # Get initial obj list
-    initobjs = listerFn()
+    try:
+        initobjs = listerFn()
+    except Exception as ex:
+        logger.error('_watchAndDo encounters exception:\n {0}'.format(ex))
+        return # don't set repeat to true, let it terminate
     init = {}
     for obj in initobjs.items:
         init[obj.metadata.uid] = obj
@@ -655,6 +672,35 @@ def _getListerAndWatcher(fn, **kwargs):
     watcherFn = lambda : _getWatchCtx(fn, **kwargs)
     return listerFn, watcherFn
 
+def _getListerAndWatcherFromClient(lister, **kwargs):
+    clientArgs, remArgs = getClientArgs(**kwargs)
+    if 'client' in clientArgs:
+        clientMethod = eval("clientArgs['client'].{0}".format(lister))
+    elif len(clientArgs) > 0:
+        with clusterLock:
+            (clusterId, loaderRet, _) = waitForK8s(**clientArgs)
+            _, clientMethod = getClientForMethod(clusterId, lister, False, loaderRet)
+        clientArgs.pop('cluster_id', None) # ignore and remove if it exists
+    else:
+        clusterId = clientArgs.pop('cluster_id') # raise error if not found
+        print("Start watch for cluster {0}".format(clusterId))
+        _, clientMethod = getClientForMethod(clusterId, lister, True)
+    listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
+    return listerFn, watcherFn
+
+def _watcherThreadStart(t, finisher=None, **kwargs):
+    if finisher is not None:
+        t.selfCtx['finisher'] = finisher
+    if 'timeout_seconds' in kwargs:
+        t.selfCtx['timeout_seconds'] = kwargs['timeout_seconds']
+        t.selfCtx['thread_start_time'] = time.time()
+    t.daemon = True
+    t.start()
+
+# returns clientArgs, remArgs
+def getClientArgs(**kwargs):
+    return utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client', 'cluster_id'], **kwargs)
+
 # To use - example:
 #
 # kubeutils.waitForK8s(id='3x',user='name@example.com')
@@ -664,37 +710,222 @@ def _getListerAndWatcher(fn, **kwargs):
 # kubeutils.WatchObjThread(0, 'NodeWatcher', {}, printer, stopper, 'list_node', None, cluster_id=****)
 # kubeutils.WatchObjThread(1, 'Kube-System Pod Watcher', {}, printer, stopper, 'list_namespaced_pod', None, 'cluster_id'=****, namespace='kube-system')
 # stop = True # to stop watching
-def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher, **kwargs):
-    waitArgs, remArgs = utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client'], **kwargs)
-    if 'client' in waitArgs:
-        clientMethod = eval("waitArgs['client'].{0}".format(lister))
-    elif len(waitArgs) > 0:
-        with clusterLock:
-            (clusterId, loaderRet, _) = waitForK8s(**waitArgs)
-            _, clientMethod = getClientForMethod(clusterId, lister, False, loaderRet)
-        remArgs.pop('cluster_id', None) # ignore and remove if it exists
-    else:
-        clusterId = remArgs.pop('cluster_id') # raise error if not found
-        print("Start watch for cluster {0}".format(clusterId))
-        _, clientMethod = getClientForMethod(clusterId, lister, True)
-    listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
+def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher=None, **kwargs):
+    listerFn, watcherFn = _getListerAndWatcherFromClient(lister, **kwargs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
-    if finisher is not None:
-        t.selfCtx['finisher'] = finisher
-    if 'timeout_seconds' in kwargs:
-        t.selfCtx['timeout_seconds'] = kwargs['timeout_seconds']
-        t.selfCtx['thread_start_time'] = time.time()
-    t.daemon = True
-    t.start()
+    _watcherThreadStart(t, finisher, **kwargs)
     return t
 
 threadIdLock = threading.Lock()
 threadIdCnt = -1
-def WatchObjOnCluster(cluster_id, threadName, sharedCtx, callback, stopLoop, lister, **kwargs):
+def getThreadId():
     with threadIdLock:
+        global threadIdCnt
         threadId = threadIdCnt + 1
+        threadIdCnt += 1
+    return threadId
+
+def WatchObjOnCluster(cluster_id, threadName, sharedCtx, callback, stopLoop, lister, **kwargs):
+    threadId = getThreadId()
     kwargs.update({'cluster_id': cluster_id})
     WatchObjThread(threadId, threadName, sharedCtx, callback, stopLoop, lister, **kwargs)
+
+def GetHttpsPort(ports):
+    for port in ports:
+        if port.name=="https":
+            return port
+
+def GetApiServerList(clusterId, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system'):
+    try:
+        pods = evalMethod(clusterId, 'list_namespaced_pod', namespace=apiPodNs)
+        nodes = evalMethod(clusterId, 'list_node')
+        servers = []
+        for pod in pods.items:
+            logger.debug("PodName: {0}".format(pod.metadata.name))
+            if pod.metadata.name.startswith(apiPodPrefix):
+                nodeName = pod.spec.node_name
+                hostIp = pod.status.host_ip # internal IP
+                hostPort = GetHttpsPort(pod.spec.containers[0].ports).host_port
+                logger.info("APIServerPod: {0} {1} {2} - search for node {3}".format(nodeName, hostIp, hostPort, nodeName))
+                for node in nodes.items:
+                    if nodeName == node.metadata.name:
+                        logger.info("RunningOnNode {0}".format(nodeName))
+                        for addr in node.status.addresses:
+                            if addr.type == "ExternalIP":
+                                serverName = "https://{0}:{1}".format(addr.address, hostPort)
+                                servers.append(serverName)
+                                logger.info("Using ExternalIP {0}".format(serverName))
+                                break
+                        if 'fqdn' in node.metadata.annotations:
+                            serverName = "https://{0}:{1}".format(node.metadata.annotations['fqdn'], hostPort)
+                            servers.append(serverName)
+                            logger.info("Using fqdn from annotation {0}".format(serverName))
+                            break
+                        if 'externalIP' in node.metdata.annotations:
+                            serverName = "https://{0}:{1}".format(node.metadata.annotations['externalIP'], hostPort)
+                            servers.append(serverName)
+                            logger.info("Using externalIP from annotation {0}".format(serverName))
+                            break
+                        logger.error("Unable to determine API server address for node {0}".format(nodeName))
+                        #raise Exception("Unable to determine API server address")
+                        # api server pod skipped
+        return servers
+    except Exception as ex:
+        logger.error("Encounter exception {0}".format(ex))
+        return None
+
+# infinite watch across multiple api servers (until termination)
+def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile'], **kwargs)
+    if 'servers' in serverArgs:
+        servers = copy.deepcopy(serverArgs['servers']) # list of API servers
+        serverFile = None
+    else:
+        serverFile = serverArgs['serverFile']
+    if 'writeServerFile' in serverArgs:
+        writeServerFile = serverArgs['writeServerFile']
+    else:
+        writeServerFile = False
+    if 'resetTime' in serverArgs:
+        resetTime = serverArgs['resetTime'] # resetTime defines how long to wait before server can be tried again
+    else:
+        resetTime = 5.0 # can try same server after 5 seconds
+    lastTry = {}
+    threadId = getThreadId()
+    startTime = time.time()
+    while True:
+        random.shuffle(servers)
+        numSkip = 0
+        if serverFile is not None:
+            with open(serverFile, 'r') as fp:
+                servers = yaml.safe_load(fp)
+        for _, server in enumerate(servers):
+            remArgs.update({'server': server})
+            cluster_id = getClusterId(**remArgs)
+            #remArgs.update({'cluster_id': cluster_id})
+            if server not in lastTry:
+                timeSinceLastTry = float('inf')
+            else:
+                timeSinceLastTry = time.time() - lastTry[server]
+            if timeSinceLastTry < resetTime:
+                numSkip += 1
+                continue
+            # update server list here if needed
+            if writeServerFile:
+                logger.info("ClusterId: {0} ServerArgs: {1}".format(cluster_id, remArgs))
+                newServers = GetApiServerList(cluster_id, apiPodPrefix, apiPodNs)
+                logger.info("Servers: {0} ServerFile: {1}".format(newServers, serverFile))
+                if newServers is not None:
+                    serversChanged = (set(newServers) != set(servers))
+                    if serversChanged or not serverFile:
+                        with open(serverArgs['serverFile'], 'w') as fp:
+                            yaml.dump(newServers, fp)
+                        serverFile = True
+            t = WatchObjThread(threadId, threadName, sharedCtx, callback, stopLoop, lister, **remArgs)
+            t.join()
+            if stopLoop():
+                return
+            if 'timeout_seconds' in kwargs and time.time()-startTime > kwargs['timeout_seconds']:
+                return
+            if serversChanged:
+                break # break the enumeration over servers
+            lastTry[server] = time.time()
+        if numSkip==len(servers):
+            time.sleep(resetTime)
+
+#Usage example
+# import kubeutils
+# cb = lambda e, o, i : print("{0}: {1}".format(e, o.metadata.name)) if o is not None else None
+# lister = 'list_namespaced_pod'
+# stopLoop = lambda : stopper
+# ca = 'ca-kube.pem'
+# cert = 'sanjeevm0@hotmail.com-kube.pem'
+# key = 'sanjeevm0@hotmail.com-kube-key.pem'
+# stopper = False
+# base = 'g:/OneDrive/sanjeevm/.kcluster/jstl6q5a'
+# kubeutils.WatchObjOnACluster('A', {}, cb, stopLoop, lister, servers=['https://sanjeevm4-infra-1.westus2.cloudapp.azure.com:6443'], \
+#    serverFile="{0}/servers2.yaml".format(base), base=base, ca=ca, cert=cert, key=key, namespace='default', \
+#    timeout_seconds=10)
+def WatchObjOnACluster(*args, **kwargs):
+    return _watchObjOnACluster(None, *args, **kwargs)
+
+# same as for WatchObjOnACluster, except runs in thread
+def WatchObjClusterThread(threadName, sharedCtx, *args, **kwargs):
+    if 'finisher' in kwargs:
+        finisher = kwargs.pop('finisher') # run finisher at end
+    else:
+        finisher = None
+    t = ThreadFn(getThreadId(), threadName, sharedCtx, _watchObjOnACluster, threadName+"A", sharedCtx, *args, **kwargs)
+    _watcherThreadStart(t, finisher, **kwargs)
+    return t
+
+class ObjTracker:
+    #(sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
+    # args encompasses: stopLoop, lister
+    # callback is additional callback after trackObjs is called, finisher is additional finisher
+    # kwargs includes: apiPodPrefix, apiPodNs, additional **kwargs
+    def __init__(self, sharedCtx, *args, callback = lambda : None, finisher = lambda : None, **kwargs):
+        self.objs = {} # obj key is uid
+        self.deletedObjQ = deque()
+        self.deletedObjs = {} # garbage collected eventually - only track objs deleted since tracker started
+        self.sharedCtx = sharedCtx
+        self.callback = callback # Additional callback
+        self.finisher = finisher # Additional finisher
+        self.args = args
+        self.kwargs = kwargs
+        self.stop = False
+        self.gcFreq = 10.0
+        self.timeTillGc = 30.0
+        self.started = False
+        self.lock = threading.Lock()
+
+    def trackObj(self, event, obj, init):
+        with self.lock:
+            if obj is not None:
+                objId = obj.metadata.uid
+                logger.info("{0}:\n{1}".format(event, obj))
+                if objId in self.objs:
+                    objDiff = utils.diff(obj.to_dict(), self.objs[objId].to_dict(), False)
+                    logger.info("Diffs:{0}:\n{1}".format(event, objDiff))
+                if event=="deleted":
+                    if objId not in self.objs:
+                        logger.error('Not present object being deleted - {0}'.format(obj))
+                    # get last prior to delete, or current
+                    self.deletedObjs[objId] = self.objs.pop(objId, obj)
+                    self.deletedObjQ.append((time.time(), objId))
+                else:
+                    self.objs[objId] = obj
+            self.callback(event, obj, init)
+
+    def gc(self, _):
+        while True:
+            with self.lock:
+                if self.stop:
+                    return
+                curTime = time.time()
+                while (len(self.deletedObjQ) > 0) and (curTime - self.deletedObjQ[0][0] >= self.timeTillGc):
+                    (_, idToDel) = self.deletedObjQ.popleft()
+                    delObj = self.deletedObjs.pop(idToDel, None)
+                    logger.info("GarbageCollect:{0}:{1}".format(idToDel, delObj.metadata.name))
+            time.sleep(self.gcFreq)
+
+    def snapshot(self):
+        with self.lock:
+            objs = copy.deepcopy(self.objs)
+            delObjs = copy.deepcopy(self.deletedObjs)
+        return objs, delObjs
+
+    def finished(self, threadSelfCtx):
+        self.stop = True # to stop gc thread
+        self.finisher() # additional finisher
+        self.started = False
+
+    def start(self):
+        if not self.started:
+            t = ThreadFn(getThreadId(), "ObjTracker-GarbageCollect", {}, self.gc)
+            t.start()
+            WatchObjClusterThread("ObjTracker", self.sharedCtx, self.trackObj, *self.args, finisher=self.finished, **self.kwargs)
+            self.started = True
 
 def WatchNodesThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)

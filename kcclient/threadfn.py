@@ -1,12 +1,13 @@
 import threading
 
 class ThreadFn (threading.Thread):
-    def __init__(self, threadID, name, sharedCtx, fn, *args):
+    def __init__(self, threadID, name, sharedCtx, fn, *args, **kwargs):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
         self.fn = fn
         self.args = args
+        self.kwargs = kwargs
         self.selfCtx = {}
         self.sharedCtx = sharedCtx
         if "finisher" in self.sharedCtx:
@@ -18,9 +19,9 @@ class ThreadFn (threading.Thread):
         self.selfCtx['thread'] = self
 
     def run(self):
-        print("Starting thread {0}".format(self.name))
+        print("Starting thread {0} - {1}".format(self.name, self.threadID))
         try:
-            self.fn(self, *self.args)
+            self.fn(self, *self.args, **self.kwargs)
         except Exception as e:
             self.sharedCtx['finished'] = True
             raise e
@@ -29,8 +30,9 @@ class ThreadFn (threading.Thread):
             self.selfCtx['finisher'](self.selfCtx)
         if self.sharedCtx["finisherType"]=="ThreadFn":
             self.runSharedFinisher()
-        print("Exiting thread {0}".format(self.name))
+        print("Exiting thread {0} - {1}".format(self.name, self.threadID))
 
+    # stop is not used internally to stop, the outside stopper function can use it if it wants
     def stop(self):
         if 'finished' in self.sharedCtx and self.sharedCtx['finished']:
             return True
@@ -47,17 +49,17 @@ class ThreadFn (threading.Thread):
 
 # Repeats fn if ret is True
 class ThreadFnR (ThreadFn):
-    def __init__(self, threadID, name, sharedCtx, fn, *args):
-        super(ThreadFnR,self).__init__(threadID, name, sharedCtx, fn, *args)
+    def __init__(self, threadID, name, sharedCtx, fn, *args, **kwargs):
+        super(ThreadFnR,self).__init__(threadID, name, sharedCtx, fn, *args, **kwargs)
         self.sharedCtx["finisherType"] = "ThreadFnR"
         self.type = "ThreadFnR"
 
     def run(self):
-        print("Starting thread {0}".format(self.name))
+        print("Starting threadRept {0} - {1}".format(self.name, self.threadID))
         while True:
             self.selfCtx['repeat'] = False
             try:
-                self.fn(self, *self.args)
+                self.fn(self, *self.args, **self.kwargs)
             except Exception as e:
                 self.sharedCtx['finished'] = True
                 raise e # thread will exit due to exception raised
@@ -69,7 +71,7 @@ class ThreadFnR (ThreadFn):
         if 'finisher' in self.selfCtx:
             self.selfCtx['finisher'](self.selfCtx)
         self.runSharedFinisher()
-        print("Exiting thread {0}".format(self.name))
+        print("Exiting threadRept {0} - {1}".format(self.name, self.threadID))
 
     def getState(self, key=None):
         if 'state' in self.selfCtx:

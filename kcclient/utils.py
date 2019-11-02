@@ -222,6 +222,71 @@ def cmp(key, x1, x2):
     else:
         return True # not in either
 
+def diffList(x1, x2, ignoreOrder=True):
+    if x1==x2:
+        return True, None
+
+    diffs = []
+    if not ignoreOrder:
+        for i in range(min(len(x1), len(x2))):
+            if x1[i] != x2[i]:
+                (same, subDiff) = diff(x1[i], x2[i], ignoreOrder)
+                if not same:
+                    diffs.append(subDiff)
+        if len(x1) > len(x2):
+            diffs.extend(x1[len(x2):])
+        else:
+            diffs.extend(x2[len(x1):])
+    else:
+        x2C = copy.deepcopy(x2)
+        for x11 in x1:
+            found = False
+            for i, x21 in enumerate(x2C):
+                if x11 == x21:
+                    found = True
+                    x2C.pop(i)
+                    break
+            if not found:
+                diffs.append(x11)
+        diffs.extend(x2C) # whatever is leftover and unused
+
+    if len(diffs) > 0:
+        return False, diffs
+    else:
+        return True, None
+
+def diffDict(x1, x2, ignoreOrder=True):
+    diffs = {}
+    for key in x1:
+        if key in x2:
+            (same, subDiffs) = diff(x1[key], x2[key], ignoreOrder)
+            if not same:
+                diffs[key] = subDiffs
+        else:
+            diffs[key] = x1[key]
+    for key in x2:
+        if key not in x1:
+            diffs[key] = x2[key]
+    if len(diffs) > 0:
+        return False, diffs
+    else:
+        return True, None
+
+def diff(x1, x2, ignoreOrder=True):
+    # if type(x1) != type(x2):
+    #     return False, x1
+
+    if isinstance(x1, list) and isinstance(x2, list):
+        return diffList(x1, x2, ignoreOrder)
+
+    if isinstance(x1, dict) and isinstance(x2, dict):
+        return diffDict(x1, x2, ignoreOrder)
+
+    if x1==x2:
+        return True, None
+    else:
+        return False, x1
+
 def dictUse(key, x):
     if key in x:
         return (isinstance(x[key], dict), x[key])
