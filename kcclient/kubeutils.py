@@ -776,7 +776,7 @@ def GetApiServerList(clusterId, apiPodPrefix='kube-apiserver-', apiPodNs='kube-s
 
 # infinite watch across multiple api servers (until termination)
 def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
-    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile'], **kwargs)
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile', 'disconnect'], **kwargs)
     if 'servers' in serverArgs:
         servers = copy.deepcopy(serverArgs['servers']) # list of API servers
         serverFile = None
@@ -831,6 +831,8 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
                 break # break the enumeration over servers
             lastTry[server] = time.time()
         if numSkip==len(servers):
+            if 'disconnect' in serverArgs:
+                serverArgs['disconnect']() # call the disconnect callback
             time.sleep(resetTime)
 
 #Usage example
@@ -877,10 +879,17 @@ class ObjTracker:
         self.gcFreq = 10.0
         self.timeTillGc = 30.0
         self.started = False
-        self.lock = threading.Lock()
+        self.disconnected = True
+        self.init = False
+        self.lock = threading.RLock()
 
     def trackObj(self, event, obj, init):
         with self.lock:
+            self.disconnected = False
+            if event == 'none':
+                self.init = True
+            elif init:
+                self.init = False
             if obj is not None:
                 objId = obj.metadata.uid
                 logger.info("{0}:\n{1}".format(event, obj))
@@ -913,18 +922,25 @@ class ObjTracker:
         with self.lock:
             objs = copy.deepcopy(self.objs)
             delObjs = copy.deepcopy(self.deletedObjs)
-        return objs, delObjs
+            init = self.init
+            disconnected = self.disconnected
+        return objs, delObjs, init, disconnected
 
     def finished(self, threadSelfCtx):
         self.stop = True # to stop gc thread
         self.finisher() # additional finisher
         self.started = False
 
+    def disconnect(self):
+        with self.lock:
+            self.disconnected = True
+
     def start(self):
         if not self.started:
             t = ThreadFn(getThreadId(), "ObjTracker-GarbageCollect", {}, self.gc)
             t.start()
-            WatchObjClusterThread("ObjTracker", self.sharedCtx, self.trackObj, *self.args, finisher=self.finished, **self.kwargs)
+            WatchObjClusterThread("ObjTracker", self.sharedCtx, self.trackObj, *self.args, 
+                finisher=self.finished, disconnect=self.disconnect, **self.kwargs)
             self.started = True
 
 def WatchNodesThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
