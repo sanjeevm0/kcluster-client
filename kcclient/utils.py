@@ -722,6 +722,54 @@ def kwargHash(**kwargs):
         output += "{}:{}".format(key, value)
     return hashlib.md5(output.encode()).hexdigest()
 
+# create a "class"-like object from a dictionary
+caseConvtRe1 = re.compile('(.)([A-Z][a-z]+)')
+caseConvtRe2 = re.compile('([a-z0-9])([A-Z])')
+def convert_to_python_case(name):
+    s1 = caseConvtRe1.sub(r'\1_\2', name)
+    return caseConvtRe2.sub(r'\1_\2', s1).lower()
+
+from pprint import pformat
+class ToClass(object):
+    def __init__(self, data, convtToPythonCase=False):
+        #self.original = copy.deepcopy(data)
+        for name, value in data.items():
+            if convtToPythonCase:
+                newName = convert_to_python_case(name)
+            else:
+                newName = name
+            setattr(self, newName, self._wrap(value, convtToPythonCase))
+
+    def _wrap(self, value, convtToPythonCase):
+        if isinstance(value, (tuple, list, set, frozenset)): 
+            return type(value)([self._wrap(v, convtToPythonCase) for v in value])
+        else:
+            return ToClass(value, convtToPythonCase) if isinstance(value, dict) else value
+
+    def __getitem__(self, val):
+        return self.__dict__[val]
+
+    def __repr__(self):
+        return pformat(self.to_dict())
+
+    def toDictString(self):
+        return '{%s}' % str(', '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.items()))
+
+    def _unwrap(self, value):
+        if isinstance(value, (tuple, list, set, frozenset)):
+            return type(value)([self._unwrap(v) for v in value])
+        elif type(self)==type(value): # was a dictionary before
+            return value.to_dict()
+        else:
+            return value
+
+    def to_dict(self):
+        d = {}
+        for attr, value in self.__dict__.items():
+            d[attr] = self._unwrap(value)
+        return d
+        #return self.original
+
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
 # x2={'b':6, 'c': [1, 2], 'd':(3,4)}

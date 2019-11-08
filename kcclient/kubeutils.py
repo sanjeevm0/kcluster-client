@@ -627,6 +627,8 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     # Get initial obj list
     try:
         initobjs = listerFn()
+        if isinstance(initobjs, dict):
+            initobjs = utils.ToClass(initobjs, True)
     except Exception as ex:
         logger.error('_watchAndDo encounters exception:\n {0}'.format(ex))
         return # don't set repeat to true, let it terminate
@@ -646,14 +648,24 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     w, watcher = watcherFn()
     thread.selfCtx['state'] = {'watcher': w}
     for e in watcher:
+        #print(e)
         #raw = e['raw_object'] # accessible as map
-        obj = e['object']
+        if isinstance(e['object'], dict):
+            obj = utils.ToClass(e['object'], True)
+        else:
+            obj = e['object']
         try:
             if e['type'].lower()=="added" and obj.metadata.uid in init and init[obj.metadata.uid].metadata.resource_version==obj.metadata.resource_version:
-                #print("Already processed: {0}".format(obj.metadata.uid))
+                logger.debug("Already processed: {0}".format(obj.metadata.uid))
                 init.pop(obj.metadata.uid)
                 continue
-        except Exception:
+            # elif e['type'].lower()=="added":
+            #     if obj.metadata.uid not in init:
+            #         logger.debug("{0} not in init".format(obj.metadata.uid))
+            #     elif init[obj.metadata.uid].metadata.resource_version != obj.metadata.resource_version:
+            #         logger.debug("Res version no match {0} <> {1}".format(init[obj.metadata.uid].metadata.resource_version, obj.metadata.resource_version))                
+        except Exception as ex:
+            logger.error("_watchAndDo Encounter exception {0}".format(ex))
             pass
         if stopLoop():
             w.stop()
@@ -774,31 +786,59 @@ def GetApiServerList(clusterId, apiPodPrefix='kube-apiserver-', apiPodNs='kube-s
         logger.error("Encounter exception {0}".format(ex))
         return None
 
+def getServers(serverFile, servers):
+    if servers is not None:
+        return servers # servers overrides serverFile
+    if serverFile is not None:
+        with open(serverFile, 'r') as fp:
+            return yaml.safe_load(fp)
+    return None
+
+def DoOnCluster(doer, **kwargs):
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry'], **kwargs)
+    _, doArgs = getClientArgs(**remArgs)
+    servers = serverArgs.pop('servers', None)
+    serverFile = serverArgs.pop('serverFile', None)
+    numTry = serverArgs.pop('numTry', 1)
+    resetTime = serverArgs.pop('resetTime', 5.0)
+    lastTry = {}
+    tryCnt = 0
+    while tryCnt < numTry:
+        numSkip = 0
+        servers = getServers(serverFile, servers)
+        random.shuffle(servers)
+        for _, server in enumerate(servers):
+            remArgs.update({'server': server})
+            cluster_id = getClusterId(**remArgs)
+            timeSinceLastTry = time.time() - lastTry.get(server, 0.0)
+            if timeSinceLastTry < resetTime:
+                numSkip += 1
+                continue
+            _, methodFn = getClientForMethod(cluster_id, doer, True)
+            try:
+                return methodFn(**doArgs)
+            except Exception as ex:
+                logger.warning('DoOnCluster encounters exception {0}'.format(ex))
+                pass
+        if numSkip==len(servers):
+            time.sleep(resetTime)
+        tryCnt += 1
+
 # infinite watch across multiple api servers (until termination)
 def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
     serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile', 'disconnect'], **kwargs)
-    if 'servers' in serverArgs:
-        servers = copy.deepcopy(serverArgs['servers']) # list of API servers
-        serverFile = None
-    else:
-        serverFile = serverArgs['serverFile']
-    if 'writeServerFile' in serverArgs:
-        writeServerFile = serverArgs['writeServerFile']
-    else:
-        writeServerFile = False
-    if 'resetTime' in serverArgs:
-        resetTime = serverArgs['resetTime'] # resetTime defines how long to wait before server can be tried again
-    else:
-        resetTime = 5.0 # can try same server after 5 seconds
+    servers = copy.deepcopy(serverArgs.pop('servers', None))
+    serverFile = serverArgs.pop('serverFile', None)
+    writeServerFile = serverArgs.pop('writeServerFile', False)
+    resetTime = serverArgs.pop('resetTime', 5.0) # resetTime defines how long to wait before server can be tried again, default 5.0
     lastTry = {}
     threadId = getThreadId()
     startTime = time.time()
     while True:
-        random.shuffle(servers)
         numSkip = 0
-        if serverFile is not None:
-            with open(serverFile, 'r') as fp:
-                servers = yaml.safe_load(fp)
+        serverReadFromFile = servers is None
+        servers = getServers(serverFile, servers)
+        random.shuffle(servers)
         for _, server in enumerate(servers):
             remArgs.update({'server': server})
             cluster_id = getClusterId(**remArgs)
@@ -811,16 +851,16 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
                 numSkip += 1
                 continue
             # update server list here if needed
-            if writeServerFile:
+            serversChanged = False
+            if writeServerFile and serverFile is not None:
                 logger.info("ClusterId: {0} ServerArgs: {1}".format(cluster_id, remArgs))
                 newServers = GetApiServerList(cluster_id, apiPodPrefix, apiPodNs)
                 logger.info("Servers: {0} ServerFile: {1}".format(newServers, serverFile))
                 if newServers is not None:
                     serversChanged = (set(newServers) != set(servers))
-                    if serversChanged or not serverFile:
+                    if serversChanged or not serverReadFromFile:
                         with open(serverArgs['serverFile'], 'w') as fp:
                             yaml.dump(newServers, fp)
-                        serverFile = True
             t = WatchObjThread(threadId, threadName, sharedCtx, callback, stopLoop, lister, **remArgs)
             t.join()
             if stopLoop():
@@ -830,6 +870,8 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
             if serversChanged:
                 break # break the enumeration over servers
             lastTry[server] = time.time()
+        if serverFile is not None:
+            servers = None # reread from file in next iteration
         if numSkip==len(servers):
             if 'disconnect' in serverArgs:
                 serverArgs['disconnect']() # call the disconnect callback
@@ -866,7 +908,7 @@ class ObjTracker:
     # args encompasses: stopLoop, lister
     # callback is additional callback after trackObjs is called, finisher is additional finisher
     # kwargs includes: apiPodPrefix, apiPodNs, additional **kwargs
-    def __init__(self, sharedCtx, *args, callback = lambda : None, finisher = lambda : None, **kwargs):
+    def __init__(self, sharedCtx, *args, callback = lambda a,b,c,d : None, finisher = lambda : None, **kwargs):
         self.objs = {} # obj key is uid
         self.deletedObjQ = deque()
         self.deletedObjs = {} # garbage collected eventually - only track objs deleted since tracker started
@@ -879,21 +921,23 @@ class ObjTracker:
         self.gcFreq = 10.0
         self.timeTillGc = 30.0
         self.started = False
-        self.disconnected = True
+        self.connected = False
         self.init = False
         self.lock = threading.RLock()
 
     def trackObj(self, event, obj, init):
         with self.lock:
-            self.disconnected = False
+            self.connected = True
             if event == 'none':
                 self.init = True
             elif init:
                 self.init = False
+            objPrev = None
             if obj is not None:
                 objId = obj.metadata.uid
                 logger.info("{0}:\n{1}".format(event, obj))
                 if objId in self.objs:
+                    objPrev = self.objs[objId]
                     objDiff = utils.diff(obj.to_dict(), self.objs[objId].to_dict(), False)
                     logger.info("Diffs:{0}:\n{1}".format(event, objDiff))
                 if event=="deleted":
@@ -904,7 +948,7 @@ class ObjTracker:
                     self.deletedObjQ.append((time.time(), objId))
                 else:
                     self.objs[objId] = obj
-            self.callback(event, obj, init)
+            self.callback(event, obj, init, objPrev)
 
     def gc(self, _):
         while True:
@@ -920,20 +964,25 @@ class ObjTracker:
 
     def snapshot(self):
         with self.lock:
-            objs = copy.deepcopy(self.objs)
-            delObjs = copy.deepcopy(self.deletedObjs)
-            init = self.init
-            disconnected = self.disconnected
-        return objs, delObjs, init, disconnected
+            if self.started:
+                objs = copy.deepcopy(self.objs)
+                delObjs = copy.deepcopy(self.deletedObjs)
+                init = self.init
+                connected = self.connected
+                started = self.started
+            else:
+                raise Exception("Object Tracker has stopped -- run start to restart")
+        return objs, delObjs, init, connected, started
 
     def finished(self, threadSelfCtx):
-        self.stop = True # to stop gc thread
-        self.finisher() # additional finisher
-        self.started = False
+        with self.lock:
+            self.stop = True # to stop gc thread
+            self.finisher() # additional finisher
+            self.started = False
 
     def disconnect(self):
         with self.lock:
-            self.disconnected = True
+            self.connected = False
 
     def start(self):
         if not self.started:
