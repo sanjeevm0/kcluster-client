@@ -773,7 +773,7 @@ def GetApiServerList(clusterId, apiPodPrefix='kube-apiserver-', apiPodNs='kube-s
                             servers.append(serverName)
                             logger.info("Using fqdn from annotation {0}".format(serverName))
                             break
-                        if 'externalIP' in node.metdata.annotations:
+                        if 'externalIP' in node.metadata.annotations:
                             serverName = "https://{0}:{1}".format(node.metadata.annotations['externalIP'], hostPort)
                             servers.append(serverName)
                             logger.info("Using externalIP from annotation {0}".format(serverName))
