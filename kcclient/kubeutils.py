@@ -840,6 +840,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
         servers = getServers(serverFile, servers)
         random.shuffle(servers)
         for _, server in enumerate(servers):
+            print("Use server {0}".format(server))
             remArgs.update({'server': server})
             cluster_id = getClusterId(**remArgs)
             #remArgs.update({'cluster_id': cluster_id})
