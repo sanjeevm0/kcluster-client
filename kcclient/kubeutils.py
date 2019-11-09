@@ -15,6 +15,7 @@ import glob
 import hashlib
 import threading
 import urllib3
+import atexit
 from collections import deque
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -130,14 +131,17 @@ def _loadCfgCert2(server, base, ca, cert, key):
         ],
         "current-context": "default"
     }
-    logger.info("CFG: {0}".format(yaml.safe_dump(cfg)))
+    logger.info("CFG:\n{0}".format(yaml.safe_dump(cfg)))
     try:
         (_, tmp) = tempfile.mkstemp(suffix=".yaml")
         with open(tmp, 'w') as fp:
             yaml.dump(cfg, fp)
         kcfg.load_kube_config(tmp)
     finally:
-        os.remove(tmp)
+        try:
+            os.remove(tmp)
+        except Exception:
+            atexit.register(os.remove, tmp)
 
 # Load CFG from a Kcluster client
 def _loadCfgKclient(id, user):
