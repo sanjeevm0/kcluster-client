@@ -97,6 +97,48 @@ def _loadCfgCert(server, base, ca, cert, key):
     finally:
         os.remove(tmp)
 
+def _loadCfgCert2(server, base, ca, cert, key):
+    cfg = {
+        "apiVersion": "v1",
+        "kind": "Config",
+        "clusters": [
+            {
+                "name": "local",
+                "cluster": {
+                    "certificate-authority": "{0}/{1}".format(base, ca),
+                    "server": server,
+                }
+            }
+        ],
+        "users": [
+            {
+                "name": "cluster-admin",
+                "user": {
+                    "client-certificate": "{0}/{1}".format(base, cert),
+                    "client-key": "{0}/{1}".format(base, key)
+                }
+            }
+        ],
+        "contexts": [
+            {
+                "name": "default",
+                "context": {
+                    "cluster": "local",
+                    "user": "cluster-admin"
+                }
+            }
+        ],
+        "current-context": "default"
+    }
+    logger.info("CFG: {0}".format(yaml.safe_dump(cfg)))
+    try:
+        (_, tmp) = tempfile.mkstemp(suffix=".yaml")
+        with open(tmp, 'w') as fp:
+            yaml.dump(cfg, fp)
+        kcfg.load_kube_config(tmp)
+    finally:
+        os.remove(tmp)
+
 # Load CFG from a Kcluster client
 def _loadCfgKclient(id, user):
     home = utils.getHome()
@@ -179,7 +221,9 @@ def waitForKube(deploydir, modssl_dir=False):
 
 def waitForK(loader, creator=None):
     loaderRet = None
+    numTry = 0
     while True:
+        logger.debug("waitForK - try {0}".format(numTry))
         try:
             ret = loader()
             if ret is None:
@@ -187,11 +231,14 @@ def waitForK(loader, creator=None):
             else:
                 loaderRet = ret
                 kubeclient = kclient.CoreV1Api(ret)
-        except Exception:
+        except Exception as ex:
+            logger.debug("waitForK Encounter exception: {0}".format(ex))
             kubeclient = None
         if isAlive(kubeclient):
             break
+        logger.debug("waitForK no exception, but not alive.")
         time.sleep(5.0)
+        numTry += 1
     if creator is None:
         return (loaderRet, None)
     else:
@@ -207,7 +254,7 @@ def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, 
         if deploydir is not None:
             return waitForK(lambda : _loadCfg(deploydir, modssl_dir))
         elif server is not None:
-            return waitForK(lambda : _loadCfgCert(server, base, ca, cert, key))
+            return waitForK(lambda : _loadCfgCert2(server, base, ca, cert, key))
         elif id is not None:
             return waitForK(lambda : _loadCfgKclient(id, user))
         else:
@@ -620,7 +667,7 @@ def _getWatchCtx(lister, **kwargs):
     return w, watcher
 
 def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
-    print("IN WATCH AND DO")
+    #print("IN WATCH AND DO")
     if stopLoop is None:
         stopLoop = lambda : False
     if stopLoop():
@@ -677,7 +724,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
             return
     if ('timeout_seconds' not in thread.selfCtx or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
-        print("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
+        logger.info("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
         thread.selfCtx['repeat'] = True
 
 def _getListerAndWatcher(fn, **kwargs):
@@ -696,7 +743,7 @@ def _getListerAndWatcherFromClient(lister, **kwargs):
         clientArgs.pop('cluster_id', None) # ignore and remove if it exists
     else:
         clusterId = clientArgs.pop('cluster_id') # raise error if not found
-        print("Start watch for cluster {0}".format(clusterId))
+        logger.info("Start watch for cluster {0}".format(clusterId))
         _, clientMethod = getClientForMethod(clusterId, lister, True)
     listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
     return listerFn, watcherFn
@@ -724,7 +771,7 @@ def getClientArgs(**kwargs):
 # kubeutils.WatchObjThread(1, 'Kube-System Pod Watcher', {}, printer, stopper, 'list_namespaced_pod', None, 'cluster_id'=****, namespace='kube-system')
 # stop = True # to stop watching
 def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher=None, **kwargs):
-    print("IN WATCH OBJ")
+    #print("IN WATCH OBJ")
     listerFn, watcherFn = _getListerAndWatcherFromClient(lister, **kwargs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
     _watcherThreadStart(t, finisher, **kwargs)
@@ -842,7 +889,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
         servers = getServers(serverFile, servers)
         random.shuffle(servers)
         for _, server in enumerate(servers):
-            print("Use server {0}".format(server))
+            logger.info("Use server {0}".format(server))
             remArgs.update({'server': server})
             cluster_id = getClusterId(**remArgs)
             #remArgs.update({'cluster_id': cluster_id})
@@ -864,7 +911,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
                     if serversChanged or not serverReadFromFile:
                         with open(serverArgs['serverFile'], 'w') as fp:
                             yaml.dump(newServers, fp)
-            print("STARTING WATCHOBJ")
+            #print("STARTING WATCHOBJ")
             t = WatchObjThread(threadId, threadName, sharedCtx, callback, stopLoop, lister, **remArgs)
             t.join()
             if stopLoop():
