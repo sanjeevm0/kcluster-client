@@ -620,6 +620,7 @@ def _getWatchCtx(lister, **kwargs):
     return w, watcher
 
 def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
+    print("IN WATCH AND DO")
     if stopLoop is None:
         stopLoop = lambda : False
     if stopLoop():
@@ -723,6 +724,7 @@ def getClientArgs(**kwargs):
 # kubeutils.WatchObjThread(1, 'Kube-System Pod Watcher', {}, printer, stopper, 'list_namespaced_pod', None, 'cluster_id'=****, namespace='kube-system')
 # stop = True # to stop watching
 def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finisher=None, **kwargs):
+    print("IN WATCH OBJ")
     listerFn, watcherFn = _getListerAndWatcherFromClient(lister, **kwargs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
     _watcherThreadStart(t, finisher, **kwargs)
@@ -862,6 +864,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
                     if serversChanged or not serverReadFromFile:
                         with open(serverArgs['serverFile'], 'w') as fp:
                             yaml.dump(newServers, fp)
+            print("STARTING WATCHOBJ")
             t = WatchObjThread(threadId, threadName, sharedCtx, callback, stopLoop, lister, **remArgs)
             t.join()
             if stopLoop():
