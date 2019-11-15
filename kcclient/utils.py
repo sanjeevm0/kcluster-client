@@ -287,6 +287,29 @@ def diff(x1, x2, ignoreOrder=True):
     else:
         return False, x1
 
+# JSON patch to transform xO (old) to xN (new)
+def diffJSON(xN, xO):
+    diff = {}
+    for key, val in xN.items():
+        if key in xO:
+            if isinstance(val, dict) and isinstance(xO[key], dict):
+                subDiff = diffJSON(xN[key], xO[key])
+                if subDiff!={}:
+                    diff[key] = subDiff
+            else:
+                if xN[key] != xO[key]:
+                    diff[key] = xN[key]
+        else:
+            diff[key] = xN[key]
+    for key, val in xO.items():
+        if key not in xN:
+            # deleted key
+            diff[key] = None
+    if diff=={}:
+        return {}
+    else:
+        return diff
+
 def dictUse(key, x):
     if key in x:
         return (isinstance(x[key], dict), x[key])
@@ -730,12 +753,13 @@ def convert_to_python_case(name):
     return caseConvtRe2.sub(r'\1_\2', s1).lower()
 
 from pprint import pformat
+import inflection
 class ToClass(object):
     def __init__(self, data, convtToPythonCase=False):
         #self.original = copy.deepcopy(data)
         for name, value in data.items():
             if convtToPythonCase:
-                newName = convert_to_python_case(name)
+                newName = inflection.underscore(name)
             else:
                 newName = name
             setattr(self, newName, self._wrap(value, convtToPythonCase))
@@ -755,18 +779,22 @@ class ToClass(object):
     def toDictString(self):
         return '{%s}' % str(', '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.items()))
 
-    def _unwrap(self, value):
+    def _unwrap(self, value, convtToCamelCase):
         if isinstance(value, (tuple, list, set, frozenset)):
-            return type(value)([self._unwrap(v) for v in value])
+            return type(value)([self._unwrap(v, convtToCamelCase) for v in value])
         elif type(self)==type(value): # was a dictionary before
-            return value.to_dict()
+            return value.to_dict(convtToCamelCase)
         else:
             return value
 
-    def to_dict(self):
+    def to_dict(self, convtToCamelCase=False):
         d = {}
         for attr, value in self.__dict__.items():
-            d[attr] = self._unwrap(value)
+            if convtToCamelCase:
+                newName = inflection.camelize(attr, False)
+            else:
+                newName = attr
+            d[newName] = self._unwrap(value, convtToCamelCase)
         return d
         #return self.original
 

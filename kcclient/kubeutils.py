@@ -8,6 +8,7 @@ import time
 import yaml
 import re
 import copy
+import threadfn
 from threadfn import ThreadFn, ThreadFnR
 import tempfile
 import random
@@ -16,6 +17,7 @@ import hashlib
 import threading
 import urllib3
 import atexit
+import inflection
 from collections import deque
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -28,6 +30,11 @@ clusters = {}
 clusterLock = threading.RLock()
 apiObjs = {}
 cfgArgs = {}
+
+def setLogger(_logger):
+    global logger
+    logger = _logger
+    threadfn.setLogger(_logger)
 
 def _findMethodElem(method):
     if method in methods:
@@ -131,7 +138,7 @@ def _loadCfgCert2(server, base, ca, cert, key):
         ],
         "current-context": "default"
     }
-    logger.info("CFG:\n{0}".format(yaml.safe_dump(cfg)))
+    logger.debug("CFG:\n{0}".format(yaml.safe_dump(cfg)))
     try:
         (_, tmp) = tempfile.mkstemp(suffix=".yaml")
         with open(tmp, 'w') as fp:
@@ -747,7 +754,7 @@ def _getListerAndWatcherFromClient(lister, **kwargs):
         clientArgs.pop('cluster_id', None) # ignore and remove if it exists
     else:
         clusterId = clientArgs.pop('cluster_id') # raise error if not found
-        logger.info("Start watch for cluster {0}".format(clusterId))
+        logger.debug("Start watch for cluster {0}".format(clusterId))
         _, clientMethod = getClientForMethod(clusterId, lister, True)
     listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
     return listerFn, watcherFn
@@ -847,6 +854,34 @@ def getServers(serverFile, servers):
             return yaml.safe_load(fp)
     return None
 
+def DoOnServers(doer, *args, **kwargs):
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry'], **kwargs)
+    servers = serverArgs.pop('servers', None)
+    serverFile = serverArgs.pop('serverFile', None)
+    numTry = serverArgs.pop('numTry', 1)
+    resetTime = serverArgs.pop('resetTime', 5.0)
+    lastTry = {}
+    tryCnt = 0
+    while tryCnt < numTry:
+        numSkip = 0
+        servers = getServers(serverFile, servers)
+        random.shuffle(servers)
+        for _, server in enumerate(servers):
+            remArgs.update({'server': server})
+            timeSinceLastTry = time.time() - lastTry.get(server, 0.0)
+            if timeSinceLastTry < resetTime:
+                numSkip += 1
+                continue
+            try:
+                return True, doer(*args, **remArgs)
+            except Exception as ex:
+                logger.warning('DoOnServers encounters exception {0}'.format(ex))
+                pass
+        if numSkip==len(servers):
+            time.sleep(resetTime)
+        tryCnt += 1
+    return False, None
+
 def DoOnCluster(doer, **kwargs):
     serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry'], **kwargs)
     _, doArgs = getClientArgs(**remArgs)
@@ -869,13 +904,14 @@ def DoOnCluster(doer, **kwargs):
                 continue
             _, methodFn = getClientForMethod(cluster_id, doer, True)
             try:
-                return methodFn(**doArgs)
+                return True, methodFn(**doArgs)
             except Exception as ex:
                 logger.warning('DoOnCluster encounters exception {0}'.format(ex))
                 pass
         if numSkip==len(servers):
             time.sleep(resetTime)
         tryCnt += 1
+    return False, None
 
 # infinite watch across multiple api servers (until termination)
 def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
@@ -913,6 +949,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
                 if newServers is not None:
                     serversChanged = (set(newServers) != set(servers))
                     if serversChanged or not serverReadFromFile:
+                        logger.info("ServersDumped: Old: {0} New: {1} ReadFromFile: {2}".format(servers, newServers, serverReadFromFile))
                         with open(serverArgs['serverFile'], 'w') as fp:
                             yaml.dump(newServers, fp)
             #print("STARTING WATCHOBJ")
@@ -925,12 +962,12 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
             if serversChanged:
                 break # break the enumeration over servers
             lastTry[server] = time.time()
-        if serverFile is not None:
-            servers = None # reread from file in next iteration
         if numSkip==len(servers):
             if 'disconnect' in serverArgs:
                 serverArgs['disconnect']() # call the disconnect callback
             time.sleep(resetTime)
+        if serverFile is not None:
+            servers = None # reread from file in next iteration
 
 #Usage example
 # import kubeutils
@@ -958,6 +995,56 @@ def WatchObjClusterThread(threadName, sharedCtx, *args, **kwargs):
     _watcherThreadStart(t, finisher, **kwargs)
     return t
 
+# Supports token (e.g. service token, and TLS certs for auth)
+class Cluster:    
+    def __init__(self, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None):
+        self.api_key = api_key
+        self.base = base
+        self.ca = ca
+        self.cert = cert
+        self.key = key
+        self.serversFixed = servers
+        self.serverFileFixed = serverFile
+        self.clients = {}
+
+    def getApiClient(self, server):
+        if server not in self.clients:
+            cfg = kclient.Configuration()
+            cfg.verify_ssl = False
+            if self.api_key is not None:
+                cfg.api_key['authorization'] = self.api_key # a token
+                cfg.api_key_prefix['authorization'] = 'Bearer'
+            else:
+                cfg.ssl_ca_cert = "{0}/{1}".format(self.base, self.ca)
+                cfg.cert_file = "{0}/{1}".format(self.base, self.cert)
+                cfg.key_file = "{0}/{1}".format(self.base, self.key)
+            cfg.host = server
+            self.clients[server] = kclient.ApiClient(cfg)
+        return self.clients[server]
+
+    def call_api_server(self, *args, **kwargs):
+        server = kwargs.pop('server')
+        apiClient = self.getApiClient(server)
+        print("Call API with: {0} {1}".format(args, kwargs))
+        return apiClient.call_api(*args, **kwargs)
+
+    def call_api(self, *args, 
+                 auth_settings=['BearerToken'],
+                 header_params={'Accept': 'application/json', 'Content-Type': 'application/json'},
+                 response_type='object',
+                 async_req=False,
+                 _return_http_data_only=True,
+                 _preload_content=True, **kwargs):
+                 # body if needed, post_params, files, _request_timeout, collection_formats (if needed):
+        if self.serverFileFixed:
+            kwargs.update({'serverFile': self.serverFileFixed})
+        if self.serversFixed:
+            kwargs.update({'servers': self.serversFixed})
+        return DoOnServers(self.call_api_server, *args, auth_settings=auth_settings, header_params=header_params, 
+            response_type=response_type, async_req=async_req, _return_http_data_only=_return_http_data_only,
+            _preload_content=_preload_content, **kwargs)
+
+# Object tracker
 class ObjTracker:
     #(sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
     # args encompasses: stopLoop, lister
@@ -970,31 +1057,39 @@ class ObjTracker:
         self.sharedCtx = sharedCtx
         self.callback = callback # Additional callback
         self.finisher = finisher # Additional finisher
+        self.stopper = args[0]
+        self.lister = args[1]
+        self.clusterName = kwargs.pop('clusterName', "NONAME_PROVIDED")
         self.args = args
         self.kwargs = kwargs
         self.stop = False
         self.gcFreq = 10.0
         self.timeTillGc = 30.0
         self.started = False
-        self.connected = False
+        self.connected = True # connected unless told otherwise
         self.init = False
         self.lock = threading.RLock()
 
     def trackObj(self, event, obj, init):
         with self.lock:
             self.connected = True
+            # exit for duplicate add (e.g. watcher thread restarts) - no callback needed
+            if event == 'added' and obj is not None and obj.metadata.uid in self.objs:
+                if obj.metadata.resource_version==self.objs[obj.metadata.uid].metadata.resource_version:
+                    return
             if event == 'none':
                 self.init = True
             elif init:
-                self.init = False
+                self.init = False # go back to uninit state
             objPrev = None
             if obj is not None:
                 objId = obj.metadata.uid
-                logger.info("{0}:\n{1}".format(event, obj))
+                logger.info("{0}: {1}".format(event, obj.metadata.name))
+                logger.debug("{0}:\n{1}".format(event, obj))
                 if objId in self.objs:
                     objPrev = self.objs[objId]
                     objDiff = utils.diff(obj.to_dict(), self.objs[objId].to_dict(), False)
-                    logger.info("Diffs:{0}:\n{1}".format(event, objDiff))
+                    logger.debug("Diffs:{0}:\n{1}".format(event, objDiff))
                 if event=="deleted":
                     if objId not in self.objs:
                         logger.error('Not present object being deleted - {0}'.format(obj))
@@ -1026,7 +1121,39 @@ class ObjTracker:
                 connected = self.connected
                 started = self.started
             else:
-                raise Exception("Object Tracker has stopped -- run start to restart")
+                objs = None
+                delObjs = None
+                init = False
+                connected = False
+                started = self.started
+                #raise Exception("Object Tracker has stopped -- run start to restart")
+        return objs, delObjs, init, connected, started
+
+    def getObjName(self, o, addNamespace):
+        if addNamespace and hasattr(o.metadata, 'namespace'):
+            return "{}/{}".format(o.metadata.namespace, o.metadata.name)
+        else:
+            return o.metadata.name
+
+    def snapshotByName(self, addNamespace=True):
+        with self.lock:
+            if self.started:
+                objs = {}
+                for _, o in self.objs.items():
+                    objs[self.getObjName(o, addNamespace)] = copy.deepcopy(o)
+                delObjs = {}
+                for _, o in self.deletedObjs.items():
+                    delObjs[self.getObjName(o, addNamespace)] = copy.deepcopy(o)
+                init = self.init
+                connected = self.connected
+                started = self.started
+            else:
+                objs = None
+                delObjs = None
+                init = False
+                connected = False
+                started = self.started
+                #raise Exception("Object Tracker has stopped -- run start to restart")
         return objs, delObjs, init, connected, started
 
     def finished(self, threadSelfCtx):
@@ -1040,12 +1167,14 @@ class ObjTracker:
             self.connected = False
 
     def start(self):
-        if not self.started:
-            t = ThreadFn(getThreadId(), "ObjTracker-GarbageCollect", {}, self.gc)
-            t.start()
-            WatchObjClusterThread("ObjTracker", self.sharedCtx, self.trackObj, *self.args, 
-                finisher=self.finished, disconnect=self.disconnect, **self.kwargs)
-            self.started = True
+        with self.lock:
+            if not self.started:
+                t = ThreadFn(getThreadId(), "ObjTracker-GarbageCollect-{0}-{1}".format(self.clusterName, self.lister), {}, self.gc)
+                t.daemon = True
+                t.start()
+                WatchObjClusterThread("ObjTracker-{0}-{1}".format(self.clusterName, self.lister), self.sharedCtx, self.trackObj, *self.args, 
+                    finisher=self.finished, disconnect=self.disconnect, **self.kwargs)
+                self.started = True
 
 def WatchNodesThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)

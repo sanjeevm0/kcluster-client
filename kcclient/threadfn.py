@@ -1,5 +1,10 @@
 import threading
 
+printer = print
+def setLogger(logger):
+    global printer
+    printer = logger.info
+
 class ThreadFn (threading.Thread):
     def __init__(self, threadID, name, sharedCtx, fn, *args, **kwargs):
         threading.Thread.__init__(self)
@@ -19,7 +24,7 @@ class ThreadFn (threading.Thread):
         self.selfCtx['thread'] = self
 
     def run(self):
-        print("Starting thread {0} - {1}".format(self.name, self.threadID))
+        printer("Starting thread {0} - {1}".format(self.name, self.threadID))
         try:
             self.fn(self, *self.args, **self.kwargs)
         except Exception as e:
@@ -30,7 +35,7 @@ class ThreadFn (threading.Thread):
             self.selfCtx['finisher'](self.selfCtx)
         if self.sharedCtx["finisherType"]=="ThreadFn":
             self.runSharedFinisher()
-        print("Exiting thread {0} - {1}".format(self.name, self.threadID))
+        printer("Exiting thread {0} - {1}".format(self.name, self.threadID))
 
     # stop is not used internally to stop, the outside stopper function can use it if it wants
     def stop(self):
@@ -55,7 +60,7 @@ class ThreadFnR (ThreadFn):
         self.type = "ThreadFnR"
 
     def run(self):
-        print("Starting threadRept {0} - {1}".format(self.name, self.threadID))
+        printer("Starting threadRept {0} - {1}".format(self.name, self.threadID))
         while True:
             self.selfCtx['repeat'] = False
             try:
@@ -66,12 +71,12 @@ class ThreadFnR (ThreadFn):
             if not self.selfCtx['repeat']:
                 break
             else:
-                print("REPEAT LOOP for {0}".format(self.name))
+                printer("REPEAT LOOP for {0}".format(self.name))
         self.sharedCtx['finished'] = True
         if 'finisher' in self.selfCtx:
             self.selfCtx['finisher'](self.selfCtx)
         self.runSharedFinisher()
-        print("Exiting threadRept {0} - {1}".format(self.name, self.threadID))
+        printer("Exiting threadRept {0} - {1}".format(self.name, self.threadID))
 
     def getState(self, key=None):
         if 'state' in self.selfCtx:
