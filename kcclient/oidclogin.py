@@ -6,6 +6,9 @@ import requests
 import copy
 import yaml
 import os
+import sys
+thisPath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(thisPath)
 import json
 import pathlib
 from urllib.parse import urlencode, urlparse, urlunparse, ParseResult, parse_qs
