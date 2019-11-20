@@ -57,7 +57,7 @@ class SlidingMetrics():
         self.cumuN = 0
 
         self.prevTs = None
-        self.prevData = None # raw data
+        self.prevData = 0 # raw data
 
         self.bits = bits
 
