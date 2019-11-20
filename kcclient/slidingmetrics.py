@@ -30,6 +30,8 @@ def noneMin(x, y):
 class SlidingMetrics():
     # if input is avg, it is something like bytes/sec, etc., otherwise unit is bytes or seconds of latency, etc.
     def __init__(self, minWindow, maxWindow, inputType, bits=32):
+        self.minWindow = minWindow
+        self.maxWindow = maxWindow
         self.subWindow = maxWindow - minWindow
         self.maxWindows = math.ceil(minWindow / self.subWindow) + 1
         self.inputType = inputType
@@ -56,6 +58,7 @@ class SlidingMetrics():
         self.cumuNMinus1 = None
         self.cumuN = 0
 
+        self.startTs = None
         self.prevTs = None
         self.prevData = 0 # raw data
 
@@ -91,7 +94,24 @@ class SlidingMetrics():
 
         return val, cumu
 
+    def popWindow(self):
+        N0 = self.NWin.pop(0)
+        self.N -= N0
+        self.ts1Win.pop(0)
+        self.ts1 = self.ts1Win[0]
+        self.ts0 = self.tsNWin.pop(0)
+        self.minValWin.pop(0)
+        self.minVal = min(self.minValWin)
+        self.maxValWin.pop(0)
+        self.maxVal = max(self.maxValWin)
+        self.cumu1Win.pop(0)
+        self.cumu1 = self.cumu1Win[0]
+        self.cumu0 = self.cumuNWin.pop(0)
+
     def _addHelper(self, ts, data):
+        if self.startTs is None:
+            self.startTs = ts
+        ts = ts - self.startTs # normalize to start at zero
         if self.prevTs is not None and ts < self.prevTs:
             return False
         self.prevTs = ts
@@ -119,23 +139,16 @@ class SlidingMetrics():
         # pop oldest window as new window is added
         bWindowMoved = False
         if len(self.ts1Win) > self.maxWindows:
-            N0 = self.NWin.pop(0)
-            self.N -= N0
-            self.ts1Win.pop(0)
-            self.ts1 = self.ts1Win[0]
-            self.ts0 = self.tsNWin.pop(0)
-            self.minValWin.pop(0)
-            self.minVal = min(self.minValWin)
-            self.maxValWin.pop(0)
-            self.maxVal = max(self.maxValWin)
-            self.cumu1Win.pop(0)
-            self.cumu1 = self.cumu1Win[0]
-            self.cumu0 = self.cumuNWin.pop(0)
+            self.popWindow()
+            bWindowMoved = True
+
+        if self.ts1 is None:
+            self.ts1 = ts
+        while ts-self.ts1 >= self.maxWindow:
+            self.popWindow()
             bWindowMoved = True
 
         self.N += 1
-        if self.ts1 is None:
-            self.ts1 = ts
         self.tsN = ts
         self.minVal = noneMin(self.minVal, val)
         self.maxVal = noneMax(self.maxVal, val)
