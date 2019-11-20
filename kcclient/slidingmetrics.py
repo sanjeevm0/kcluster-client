@@ -1,4 +1,8 @@
 import math
+import sys
+import os
+thisPath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(thisPath)
 from enum import Enum
 from mlock import MLock
 
