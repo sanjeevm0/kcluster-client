@@ -637,6 +637,22 @@ def totalPodReqs(pod):
 
     return success, reqs, limits
 
+# returns whether or not pod has been scheduled onto a node (e.g. assigned a node), and if assigned the hostIP, and nodeName
+def podScheduled(pod):
+    # don't use pod phase as it is inaccurate
+    for c in pod.status.conditions:
+        if c.type == "PodScheduled" and c.status in [True, "True"]:
+            return (True, pod.status.host_ip, pod.spec.node_name)
+    return (False, None, None)
+
+def podRunning(pod):
+    if pod.status.phase != "Running":
+        return False
+    for c in pod.status.conditions:
+        if c.type == "Ready" and c.status in [True, "True"]:
+            return True
+    return False
+
 def getDeploymentReqs(dep):
     replicas = utils.getVal(dep, 'spec.replicas')
     podTemplate = utils.getVal(dep, 'spec.template')
@@ -1006,6 +1022,7 @@ class Cluster:
         self.serversFixed = servers
         self.serverFileFixed = serverFile
         self.clients = {}
+        self.methods = {}
 
     def getApiClient(self, server):
         if server not in self.clients:
@@ -1021,6 +1038,25 @@ class Cluster:
             cfg.host = server
             self.clients[server] = kclient.ApiClient(cfg)
         return self.clients[server]
+
+    def getMethod(self, server, method):
+        #print("Server={0} Method={1}".format(server, method))
+        ret = utils.getValK(self.methods, [server, method])
+        if ret is not None:
+            (client, methodFn) = ret
+            #print("methodFn={0}".format(methodFn))
+            if methodFn is not None:
+                return methodFn
+        elem = _findMethodElem(method)
+        #print(elem)
+        apiClient = self.getApiClient(server)
+        #print(apiClient)
+        client = eval("{0}(apiClient)".format(elem))
+        #print(client)
+        methodFn = eval('client.'+method) # a function in the instantiated class
+        #print(methodFn)
+        utils.setValK(self.methods, [server, method], (client, methodFn))
+        return methodFn
 
     def call_api_server(self, *args, **kwargs):
         server = kwargs.pop('server')
@@ -1043,6 +1079,19 @@ class Cluster:
         return DoOnServers(self.call_api_server, *args, auth_settings=auth_settings, header_params=header_params, 
             response_type=response_type, async_req=async_req, _return_http_data_only=_return_http_data_only,
             _preload_content=_preload_content, **kwargs)
+
+    def call_method_server(self, method, *args, **kwargs):
+        server = kwargs.pop('server')
+        #print(server)
+        methodFn = self.getMethod(server, method)
+        return methodFn(*args, **kwargs)
+
+    def call_method(self, method, *args, **kwargs):
+        if self.serverFileFixed:
+            kwargs.update({'serverFile': self.serverFileFixed})
+        if self.serversFixed:
+            kwargs.update({'servers': self.serversFixed})
+        return DoOnServers(self.call_method_server, method, *args, **kwargs)
 
 # Object tracker
 class ObjTracker:
