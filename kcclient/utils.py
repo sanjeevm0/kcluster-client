@@ -548,8 +548,12 @@ def splitUnquoteArgs(argStr):
 def getValK(x, key):
     #print("X: {0}: K: {1}".format(x,key))
     key0 = key.pop(0)
-    if key0[0]=='[' and key0[-1]==']':
+    index = None
+    if isinstance(key0, int):
+        index = key0
+    elif key0[0]=='[' and key0[-1]==']':
         index = int(key0[1:-1])
+    if index is not None:
         if index >= -len(x) and index < len(x):
             v = x[index]
         else:
@@ -567,7 +571,7 @@ def getValK(x, key):
 
 def getVal(x, key, splitChar="."):
     if splitChar is None:
-        return getValK(x, key) # key is already array of splits
+        return getValK(x, copy.deepcopy(key)) # key is already array of splits
     else:
         return getValK(x, key.strip().split(splitChar))
 
@@ -589,8 +593,12 @@ def _getNextSet(x, key):
 
 def setValK(x, key, v):
     key0 = key.pop(0)
-    if key0[0]=='[' and key0[-1]==']':
+    index = None
+    if isinstance(key0, int):
+        index = key0
+    elif key0[0]=='[' and key0[-1]==']':
         index = int(key0[1:-1])
+    if index is not None:
         if index < -len(x):
             raise Exception("Invalid index")
         elif index >= len(x):
@@ -612,6 +620,8 @@ def setValK(x, key, v):
 def setVal(x, key, v, splitChar="."):
     if splitChar is not None:
         key = key.strip().split(splitChar)
+    else:
+        key = copy.deepcopy(key)
     x = _getNextSet(x, key)
     setValK(x, key, v)
     return x
@@ -619,22 +629,22 @@ def setVal(x, key, v, splitChar="."):
 def addToVal(x, key, v, splitChar="."):
     curVal = getValDef(x, key, 0, splitChar)
     curVal += v
-    setVal(x, key, curVal, splitChar)
+    return setVal(x, key, curVal, splitChar)
 
 def appendToVal(x, key, v, splitChar="."):
     curVal = getValDef(x, key, [], splitChar)
     curVal.append(v)
-    setVal(x, key, curVal, splitChar)
+    return setVal(x, key, curVal, splitChar)
 
 def extendToVal(x, key, v, splitChar="."):
     curVal = getValDef(x, key, [], splitChar)
     curVal.extend(v)
-    setVal(x, key, curVal, splitChar)
+    return setVal(x, key, curVal, splitChar)
 
 def updateToVal(x, key, v, splitChar="."):
     curVal = getValDef(x, key, {}, splitChar)
     curVal.update(v)
-    setVal(x, key, curVal, splitChar)
+    return setVal(x, key, curVal, splitChar)
 
 def popFromVal(x, key, v, splitChar=".", defVal=[]):
     if isinstance(v, list) and len(v)==0:
