@@ -572,7 +572,7 @@ def getVal(x, key, splitChar="."):
         return getValK(x, key.strip().split(splitChar))
 
 def getValDef(x, key, defVal={}, splitChar="."):
-    ret = getValK(x, key.strip().split(splitChar))
+    ret = getVal(x, key, splitChar)
     if ret is None:
         return defVal
     else:
