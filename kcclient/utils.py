@@ -566,7 +566,10 @@ def getValK(x, key):
         return getValK(v, key)
 
 def getVal(x, key, splitChar="."):
-    return getValK(x, key.strip().split(splitChar))
+    if splitChar is None:
+        return getValK(x, key) # key is already array of splits
+    else:
+        return getValK(x, key.strip().split(splitChar))
 
 def getValDef(x, key, defVal={}, splitChar="."):
     ret = getValK(x, key.strip().split(splitChar))
@@ -607,8 +610,10 @@ def setValK(x, key, v):
             setValK(x[key0], key, v)
 
 def setVal(x, key, v, splitChar="."):
+    if splitChar is not None:
+        key = key.strip().split(splitChar)
     x = _getNextSet(x, key)
-    setValK(x, key.strip().split(splitChar), v)
+    setValK(x, key, v)
     return x
 
 def addToVal(x, key, v, splitChar="."):
