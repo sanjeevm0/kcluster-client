@@ -545,7 +545,7 @@ def splitUnquoteArgs(argStr):
     return args
 
 # format of keys: spec.containers.[i].resources.limits.cpu, key is array
-def getValK(x, key):
+def _getValK(x, key):
     #print("X: {0}: K: {1}".format(x,key))
     key0 = key.pop(0)
     index = None
@@ -567,13 +567,16 @@ def getValK(x, key):
         return v
     else:
         #print("X2: {0} K2: {1}".format(v, key))
-        return getValK(v, key)
+        return _getValK(v, key)
+
+def getValK(x, key):
+    return _getValK(x, copy.deepcopy(key))
 
 def getVal(x, key, splitChar="."):
     if splitChar is None:
-        return getValK(x, copy.deepcopy(key)) # key is already array of splits
+        return _getValK(x, copy.deepcopy(key)) # key is already array of splits
     else:
-        return getValK(x, key.strip().split(splitChar))
+        return _getValK(x, key.strip().split(splitChar))
 
 def getValDef(x, key, defVal={}, splitChar="."):
     ret = getVal(x, key, splitChar)
@@ -591,7 +594,7 @@ def _getNextSet(x, key):
     else:
         return x
 
-def setValK(x, key, v):
+def _setValK(x, key, v):
     key0 = key.pop(0)
     index = None
     if isinstance(key0, int):
@@ -607,7 +610,7 @@ def setValK(x, key, v):
             x[index] = v
         else:
             x[index] = _getNextSet(x[index], key)
-            setValK(x[index], key, v)
+            _setValK(x[index], key, v)
     else:
         if len(key)==0:
             x[key0] = v
@@ -615,7 +618,10 @@ def setValK(x, key, v):
             if key0 not in x:
                 x[key0] = None
             x[key0] = _getNextSet(x[key0], key)
-            setValK(x[key0], key, v)
+            _setValK(x[key0], key, v)
+
+def setValK(x, key, v):
+    return _setValK(x, copy.deepcopy(key), v)
 
 def setVal(x, key, v, splitChar="."):
     if splitChar is not None:
@@ -623,7 +629,7 @@ def setVal(x, key, v, splitChar="."):
     else:
         key = copy.deepcopy(key)
     x = _getNextSet(x, key)
-    setValK(x, key, v)
+    _setValK(x, key, v)
     return x
 
 def addToVal(x, key, v, splitChar="."):
