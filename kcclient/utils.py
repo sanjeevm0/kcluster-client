@@ -15,6 +15,22 @@ import hashlib
 
 thisPath = os.path.dirname(os.path.realpath(__file__))
 
+def getHome():
+    if 'HOME' in os.environ:
+        return os.environ['HOME']
+    elif 'USERPROFILE' in os.environ:
+        return os.environ['USERPROFILE']
+    else:
+        return ''
+
+import log
+import logging
+logger = log.start_log("{0}/logs/utils.log".format(getHome()), logging.DEBUG, logging.INFO, 'w', 'utilslog')
+
+def setLogger(_logger):
+    global logger
+    logger = _logger
+
 def tryuntil(cmdLambda, stopFn, updateFn, waitPeriod=5):
     while not stopFn():
         try:
@@ -520,14 +536,6 @@ def dumpYaml(x, outfile):
     with open(outfile, 'w') as fp:
         yaml.dump(x, fp)
 
-def getHome():
-    if 'HOME' in os.environ:
-        return os.environ['HOME']
-    elif 'USERPROFILE' in os.environ:
-        return os.environ['USERPROFILE']
-    else:
-        return ''
-
 from pathlib import Path
 def mkdir(dir):
     path = Path(dir)
@@ -818,6 +826,77 @@ class ToClass(object):
             d[newName] = self._unwrap(value, convtToCamelCase)
         return d
         #return self.original
+
+# YAML Validation
+class Yaml:
+    @staticmethod
+    def validateVal(x, schema, msgs):
+        if isinstance(schema, dict) and ('__validateExpr__' in schema or '__required__' in schema or '__value__' in schema):
+            for key in schema:
+                if key not in ['__validateExpr__', '__required__', '__value__']:
+                    msgs.append('Invalid key found {0}'.format(key))
+            try:
+                if '__validateExpr__' in schema:
+                    __val__ = x # val used in closure
+                    isvalid = eval(schema['__validateExpr__'])
+                else:
+                    isvalid = True
+            except Exception as ex:
+                logger.info('validateVal encounters exception {0} eval {1}'.format(ex, schema['__validateExpr__']))
+                isvalid = False
+            if not isvalid:
+                msgs.append('{0} fails eval {1}'.format(x, schema['__validateExpr__']))
+            if '__required__' in schema and schema['__required__'] and x is None:
+                msgs.append('{0} required value missing'.format(schema))
+            if '__value__' in schema and x is not None:
+                Yaml.validateVal(x, schema['__value__'], msgs)
+        elif x is not None:
+            Yaml.validateVar(x, schema, msgs)
+
+    @staticmethod
+    def validateVar(x, schemaX, msgs):
+        if isinstance(schemaX, (int, float, complex)):
+            if not isinstance(x, (int, float, complex)):
+                msgs.append('Type {0} not int, float, complex'.format(x))
+        elif isinstance(schemaX, str):
+            if not isinstance(x, str):
+                msgs.append('Type {0} not str'.format(x))
+        elif isinstance(schemaX, list):
+            if not isinstance(x, list):
+                msgs.append('Type {0} not list'.format(x))
+            else:
+                # X is list
+                for index, xV in enumerate(x):
+                    if index >= len(schemaX):
+                        schema = schemaX[-1] # use last one
+                    else:
+                        schema = schemaX[index]
+                    Yaml.validateVal(xV, schema, msgs)
+        elif isinstance(schemaX, dict):
+            if not isinstance(x, dict):
+                msgs.append('Type {0} is not dict'.format(x))
+            else:
+                for key, val in x.items():
+                    if key in schemaX:
+                        Yaml.validateVal(val, schemaX[key], msgs)
+                    elif '__validate__' in schemaX:
+                        Yaml.validateVal(key, schemaX['__validate__']['__validateKey__'], msgs)
+                        Yaml.validateVal(val, schemaX['__validate__']['__validateVal__'], msgs)
+                    else:
+                        msgs.append('Key {0} is not a valid key'.format(key))
+                for schemaKey, schemaVal in schemaX.items():
+                    if schemaKey not in x:
+                        Yaml.validateVal(None, schemaVal, msgs)
+
+    @staticmethod
+    def validate(x, schema):
+        msgs = []
+        try:
+            Yaml.validateVal(x, schema, msgs)
+            return len(msgs)==0, msgs
+        except Exception as ex:
+            logger.error('Validation fails x: {0} schema: {1} exception: {2}'.format(x, schema, ex))
+            return False, "Validation fails with exception {0}".format(ex)
 
 # test cases
 # x1={'a':4, 'b':6, 'c':'a'}
