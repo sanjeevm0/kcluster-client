@@ -596,7 +596,9 @@ def getValDef(x, key, defVal={}, splitChar="."):
 
 def _getNextSet(x, key):
     if x is None:
-        if key[0][0]=='[' and key[0][-1]==']':
+        if isinstance(key[0], int):
+            return []
+        elif key[0][0]=='[' and key[0][-1]==']':
             return []
         else:
             return {}
