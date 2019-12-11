@@ -12,8 +12,9 @@ import threading
 from jinja2 import Environment, FileSystemLoader, Template
 import base64
 import hashlib
-
+import sys
 thisPath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(thisPath)
 
 def getHome():
     if 'HOME' in os.environ:
