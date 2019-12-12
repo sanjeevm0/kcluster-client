@@ -830,6 +830,26 @@ class ToClass(object):
         return d
         #return self.original
 
+def pythonizeKeys(d):
+    dNew = {}
+    for key, val in d.items():
+        newKey = inflection.underscore(key)
+        if isinstance(val, dict):
+            dNew[newKey] = pythonizeKeys(val)
+        else:
+            dNew[newKey] = copy.deepcopy(val)
+    return dNew
+
+def camelizeKeys(d, upperCaseFirst=False):
+    dNew = {}
+    for key, val in d.items():
+        newKey = inflection.camelize(key, upperCaseFirst)
+        if isinstance(val, dict):
+            dNew[newKey] = camelizeKeys(val, upperCaseFirst)
+        else:
+            dNew[newKey] = copy.deepcopy(val)
+    return dNew
+
 # YAML Validation
 class Yaml:
     @staticmethod

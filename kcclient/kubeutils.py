@@ -1837,6 +1837,14 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
+def ToYaml(obj):
+    if isinstance(obj, dict):
+        return utils.camelizeKeys(obj)
+    elif type(obj)==utils.ToClass:
+        return obj.to_dict(True)
+    else:
+        return utils.camelizeKeys(obj.to_dict())
+
 # def getPodName(client):
 #     ns = getPodNs()
 #     pods = client.list_namespaced_pod(namespace=ns)
