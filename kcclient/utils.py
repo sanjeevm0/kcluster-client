@@ -830,24 +830,26 @@ class ToClass(object):
         return d
         #return self.original
 
+def _unwrap(elem, fn, *args):
+    if isinstance(elem, (tuple, list, set, frozenset)):
+        return [_unwrap(v, fn, *args) for v in elem]
+    elif isinstance(elem, dict):
+        return fn(elem, *args)
+    else:
+        return elem
+
 def pythonizeKeys(d):
     dNew = {}
     for key, val in d.items():
         newKey = inflection.underscore(key)
-        if isinstance(val, dict):
-            dNew[newKey] = pythonizeKeys(val)
-        else:
-            dNew[newKey] = copy.deepcopy(val)
+        dNew[newKey] = _unwrap(val, pythonizeKeys)
     return dNew
 
 def camelizeKeys(d, upperCaseFirst=False):
     dNew = {}
     for key, val in d.items():
         newKey = inflection.camelize(key, upperCaseFirst)
-        if isinstance(val, dict):
-            dNew[newKey] = camelizeKeys(val, upperCaseFirst)
-        else:
-            dNew[newKey] = copy.deepcopy(val)
+        dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
     return dNew
 
 # YAML Validation
