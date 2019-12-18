@@ -863,7 +863,7 @@ class Yaml:
                 if key not in ['__validateExpr__', '__required__', '__value__']:
                     msgs.append('Invalid key found {0}'.format(key))
             try:
-                if '__validateExpr__' in schema:
+                if '__validateExpr__' in schema and x is not None:
                     __val__ = x # val used in closure
                     isvalid = eval(schema['__validateExpr__'])
                 else:
