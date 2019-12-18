@@ -1061,7 +1061,7 @@ class Cluster:
     def call_api_server(self, *args, **kwargs):
         server = kwargs.pop('server')
         apiClient = self.getApiClient(server)
-        print("Call API with: {0} {1}".format(args, kwargs))
+        #print("Call API with: {0} {1}".format(args, kwargs))
         return apiClient.call_api(*args, **kwargs)
 
     def call_api(self, *args, 
