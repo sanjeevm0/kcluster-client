@@ -555,6 +555,8 @@ def splitUnquoteArgs(argStr):
 
 # format of keys: spec.containers.[i].resources.limits.cpu, key is array
 def _getValK(x, key):
+    if x is None:
+        return None
     #print("X: {0}: K: {1}".format(x,key))
     key0 = key.pop(0)
     index = None
