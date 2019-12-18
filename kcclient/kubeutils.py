@@ -889,45 +889,26 @@ def DoOnServers(doer, *args, **kwargs):
                 numSkip += 1
                 continue
             try:
-                return True, doer(*args, **remArgs)
+                return True, 200, doer(*args, **remArgs)
+            except kclient.rest.ApiException as ex:
+                logger.info('Server found, but encounter API exception {0} {1} {2}'.format(ex, args, kwargs))
+                return True, ex.status, None
             except Exception as ex:
-                logger.warning('DoOnServers encounters exception {0}'.format(ex))
+                logger.warning('DoOnServers encounters exception {0} {1}'.format(type(ex), ex))
                 pass
         if numSkip==len(servers):
             time.sleep(resetTime)
         tryCnt += 1
-    return False, None
+    logger.warning('Server not found {} {}'.format(args, kwargs))
+    return False, 0, None
 
 def DoOnCluster(doer, **kwargs):
-    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry'], **kwargs)
-    _, doArgs = getClientArgs(**remArgs)
-    servers = serverArgs.pop('servers', None)
-    serverFile = serverArgs.pop('serverFile', None)
-    numTry = serverArgs.pop('numTry', 1)
-    resetTime = serverArgs.pop('resetTime', 5.0)
-    lastTry = {}
-    tryCnt = 0
-    while tryCnt < numTry:
-        numSkip = 0
-        servers = getServers(serverFile, servers)
-        random.shuffle(servers)
-        for _, server in enumerate(servers):
-            remArgs.update({'server': server})
-            cluster_id = getClusterId(**remArgs)
-            timeSinceLastTry = time.time() - lastTry.get(server, 0.0)
-            if timeSinceLastTry < resetTime:
-                numSkip += 1
-                continue
-            _, methodFn = getClientForMethod(cluster_id, doer, True)
-            try:
-                return True, methodFn(**doArgs)
-            except Exception as ex:
-                logger.warning('DoOnCluster encounters exception {0}'.format(ex))
-                pass
-        if numSkip==len(servers):
-            time.sleep(resetTime)
-        tryCnt += 1
-    return False, None
+    def doFn(**remArgs):
+        _, doArgs = getClientArgs(**remArgs)
+        cluster_id = getClusterId(**remArgs)
+        _, methodFn = getClientForMethod(cluster_id, doer, True)
+        return methodFn(**doArgs)
+    return DoOnServers(doFn, **kwargs)
 
 # infinite watch across multiple api servers (until termination)
 def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
@@ -1092,6 +1073,10 @@ class Cluster:
         if self.serversFixed:
             kwargs.update({'servers': self.serversFixed})
         return DoOnServers(self.call_method_server, method, *args, **kwargs)
+
+    def call_method1(self, method, *args, **kwargs):
+        servers = getServers(self.serverFileFixed, self.serversFixed)
+        self.call_method_server(method, *args, **kwargs, server=servers[0])
 
 # Object tracker
 class ObjTracker:
