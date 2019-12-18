@@ -1099,13 +1099,14 @@ class ObjTracker:
     # args encompasses: stopLoop, lister
     # callback is additional callback after trackObjs is called, finisher is additional finisher
     # kwargs includes: apiPodPrefix, apiPodNs, additional **kwargs
-    def __init__(self, sharedCtx, *args, callback = lambda a,b,c,d : None, finisher = lambda : None, **kwargs):
+    def __init__(self, sharedCtx, *args, callback = lambda a,b,c,d : None, finisher = lambda : None, disconnect  = lambda : None, **kwargs):
         self.objs = {} # obj key is uid
         self.deletedObjQ = deque()
         self.deletedObjs = {} # garbage collected eventually - only track objs deleted since tracker started
         self.sharedCtx = sharedCtx
         self.callback = callback # Additional callback
-        self.finisher = finisher # Additional finisher
+        self.finisher = finisher # Additional callback on finish
+        self.onDisconnect = disconnect # Additional callback on disconnect
         self.stopper = args[0]
         self.lister = args[1]
         self.clusterName = kwargs.pop('clusterName', "NONAME_PROVIDED")
@@ -1121,7 +1122,7 @@ class ObjTracker:
 
     def trackObj(self, event, obj, init):
         with self.lock:
-            self.connected = True
+            self.connected = True # any notification means we are connected
             # exit for duplicate add (e.g. watcher thread restarts) - no callback needed
             if event == 'added' and obj is not None and obj.metadata.uid in self.objs:
                 if obj.metadata.resource_version==self.objs[obj.metadata.uid].metadata.resource_version:
@@ -1214,6 +1215,7 @@ class ObjTracker:
     def disconnect(self):
         with self.lock:
             self.connected = False
+            self.onDisconnect() # additional callback up on disconnect
 
     def start(self):
         with self.lock:
