@@ -45,14 +45,14 @@ def _findMethodElem(method):
             break
     return methods[method]
 
-def getClientForMethod(clusterId, method, reloadConfig=True, loaderIn=None):
+def getClientForMethod(clusterId, method, reloadConfig=True, loaderIn=None, waitForLive=True):
     with clusterLock:
         apiObj = utils.getValK(apiObjs, [clusterId, method])
         if apiObj is not None:
             return apiObj
         else:
             if reloadConfig:
-                (_, loader, _) = waitForK8s(**cfgArgs[clusterId])
+                (_, loader, _) = waitForK8s(**cfgArgs[clusterId], waitForLive=waitForLive)
             else:
                 loader = loaderIn
             elem = _findMethodElem(method)
@@ -230,7 +230,7 @@ def waitForKube(deploydir, modssl_dir=False):
         time.sleep(5.0)
     return kclient
 
-def waitForK(loader, creator=None):
+def waitForK(loader, creator=None, waitForLive=True):
     loaderRet = None
     numTry = 0
     while True:
@@ -245,7 +245,7 @@ def waitForK(loader, creator=None):
         except Exception as ex:
             logger.debug("waitForK Encounter exception: {0}".format(ex))
             kubeclient = None
-        if isAlive(kubeclient):
+        if not waitForLive or isAlive(kubeclient):
             break
         logger.debug("waitForK no exception, but not alive.")
         time.sleep(5.0)
@@ -257,19 +257,19 @@ def waitForK(loader, creator=None):
 
 def waitForKClient(id, user):
     #print("ID: {0} USER: {1}".format(id, user))
-    (_, created) = waitForK(lambda : _loadCfgKclient(id, user), kclient.CoreV1Api)
+    (_, created) = waitForK(lambda : _loadCfgKclient(id, user), creator=kclient.CoreV1Api)
     return created
 
-def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, ca=None, cert=None, key=None, id=None, user=None):
+def _waitForK8sHelper(deploydir=None, modssl_dir=False, server=None, base=None, ca=None, cert=None, key=None, id=None, user=None, waitForLive=True):
     with clusterLock:
         if deploydir is not None:
-            return waitForK(lambda : _loadCfg(deploydir, modssl_dir))
+            return waitForK(lambda : _loadCfg(deploydir, modssl_dir), waitForLive=waitForLive)
         elif server is not None:
-            return waitForK(lambda : _loadCfgCert2(server, base, ca, cert, key))
+            return waitForK(lambda : _loadCfgCert2(server, base, ca, cert, key), waitForLive=waitForLive)
         elif id is not None:
-            return waitForK(lambda : _loadCfgKclient(id, user))
+            return waitForK(lambda : _loadCfgKclient(id, user), waitForLive=waitForLive)
         else:
-            return waitForK(lambda : _loadCfgServiceAccount())
+            return waitForK(lambda : _loadCfgServiceAccount(), waitForLive=waitForLive)
 
 def getClusterArgs(**kwargs):
     clientArgs, _ = getClientArgs(**kwargs)
@@ -786,7 +786,7 @@ def _watcherThreadStart(t, finisher=None, **kwargs):
 
 # returns clientArgs, remArgs
 def getClientArgs(**kwargs):
-    return utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client', 'cluster_id'], **kwargs)
+    return utils.kwargFilter(['deploydir', 'modssl_dir', 'server', 'base', 'ca', 'cert', 'key', 'id', 'user', 'client', 'cluster_id', 'waitForLive'], **kwargs)
 
 # To use - example:
 #
@@ -879,6 +879,7 @@ def DoOnServers(doer, *args, **kwargs):
     lastTry = {}
     tryCnt = 0
     while tryCnt < numTry:
+        #print("TryCnt: {0} {1}".format(tryCnt, numTry))
         numSkip = 0
         servers = getServers(serverFile, servers)
         random.shuffle(servers)
@@ -895,18 +896,20 @@ def DoOnServers(doer, *args, **kwargs):
                 return True, ex.status, None
             except Exception as ex:
                 logger.warning('DoOnServers encounters exception {0} {1}'.format(type(ex), ex))
-                pass
+                pass # try a different server
+            lastTry[server] = time.time() # last time tried on this server
         if numSkip==len(servers):
             time.sleep(resetTime)
         tryCnt += 1
     logger.warning('Server not found {} {}'.format(args, kwargs))
     return False, 0, None
 
+# The following will get stuck in waitForK8s, better to use DoOnServers
 def DoOnCluster(doer, **kwargs):
     def doFn(**remArgs):
         _, doArgs = getClientArgs(**remArgs)
         cluster_id = getClusterId(**remArgs)
-        _, methodFn = getClientForMethod(cluster_id, doer, True)
+        _, methodFn = getClientForMethod(cluster_id, doer, reloadConfig=True, loaderIn=None, waitForLive=False)
         return methodFn(**doArgs)
     return DoOnServers(doFn, **kwargs)
 
@@ -922,7 +925,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
     startTime = time.time()
     while True:
         numSkip = 0
-        serverReadFromFile = servers is None
+        serverReadFromFile = (servers is None)
         servers = getServers(serverFile, servers)
         random.shuffle(servers)
         for _, server in enumerate(servers):
@@ -930,10 +933,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
             remArgs.update({'server': server})
             cluster_id = getClusterId(**remArgs)
             #remArgs.update({'cluster_id': cluster_id})
-            if server not in lastTry:
-                timeSinceLastTry = float('inf')
-            else:
-                timeSinceLastTry = time.time() - lastTry[server]
+            timeSinceLastTry = time.time() - lastTry.get(server, 0.0)
             if timeSinceLastTry < resetTime:
                 numSkip += 1
                 continue
