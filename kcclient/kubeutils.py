@@ -1076,7 +1076,7 @@ class Cluster:
 
     def call_method1(self, method, *args, **kwargs):
         servers = getServers(self.serverFileFixed, self.serversFixed)
-        self.call_method_server(method, *args, **kwargs, server=servers[0])
+        return self.call_method_server(method, *args, **kwargs, server=servers[0])
 
 # Object tracker
 class ObjTracker:
