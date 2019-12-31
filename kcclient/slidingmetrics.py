@@ -1,6 +1,7 @@
 import math
 import sys
 import os
+import copy
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 from enum import Enum
@@ -63,6 +64,18 @@ class SlidingMetrics():
         self.prevData = 0 # raw data
 
         self.bits = bits
+
+    def dump(self):
+        o = self.__dict__
+        return copy.deepcopy(o.pop("lock"))
+
+    @staticmethod
+    def load(o):
+        x = SlidingMetrics(10, 20, Input.Value, bits=32)
+        o = copy.deepcopy(o)
+        for key, val in o.items():
+            setattr(x, key, val)
+        return x
 
     def _resetCumu(self):
         amtToSub = self.cumu0
