@@ -854,6 +854,43 @@ def camelizeKeys(d, upperCaseFirst=False):
         dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
     return dNew
 
+def _unwrapWithCopy(elem, fn, *args):
+    if isinstance(elem, (tuple, list, set, frozenset)):
+        return [_unwrap(v, fn, *args) for v in elem]
+    elif isinstance(elem, dict):
+        return fn(elem, *args)
+    else:
+        return copy.deepcopy(elem)
+
+def smartCopy(x, setExToNone=False, keyMapper=lambda key : key, valMapper=lambda key, val : val):
+    if not isinstance(x, dict):
+        return _unwrapWithCopy(x, smartCopy, setExToNone, keyMapper, valMapper)
+    xNew = {}
+    for key, val in x.items():
+        try:
+            newKey = keyMapper(key)
+        except Exception:
+            continue
+        try:
+            newVal = valMapper(newKey, val)
+            xNew[newKey] = _unwrapWithCopy(newVal, smartCopy, setExToNone, keyMapper, valMapper)
+        except Exception:
+            if setExToNone:
+                xNew[newKey] = None # any exception results in None
+    return xNew
+
+# convert to YAML like format
+def smartDump(x, setExToNone=False):
+    def valMapper(key, val):
+        try:
+            return val.__dict__ # for classes
+        except Exception:
+            return val
+    return smartCopy(x, setExToNone=setExToNone, valMapper=valMapper)
+
+# # load from YAML like format
+# def smartLoad(xTxt, creator):
+
 # YAML Validation
 class Yaml:
     @staticmethod
