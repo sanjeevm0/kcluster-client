@@ -66,8 +66,9 @@ class SlidingMetrics():
         self.bits = bits
 
     def dump(self):
-        o = self.__dict__
-        return copy.deepcopy(o.pop("lock"))
+        o = copy.deepcopy(self.__dict__) # copy so object not modified
+        o.pop("lock")
+        return o
 
     @staticmethod
     def load(o):
