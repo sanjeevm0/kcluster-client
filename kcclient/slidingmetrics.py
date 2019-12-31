@@ -6,6 +6,7 @@ thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 from enum import Enum
 from mlock import MLock
+import utils
 
 # Input.Cumulative means cumulative value is being input (e.g. total bytes)
 # Input.Average means time average is being input (e.g. bytes/sec)
@@ -66,8 +67,8 @@ class SlidingMetrics():
         self.bits = bits
 
     def dump(self):
-        o = copy.deepcopy(self.__dict__) # copy so object not modified
-        o.pop("lock")
+        o = utils.smartCopy(self) # copy so object not modified
+        o.pop("lock", None)
         return o
 
     @staticmethod

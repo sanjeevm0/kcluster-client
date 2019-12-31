@@ -864,7 +864,11 @@ def _unwrapWithCopy(elem, fn, *args):
 
 def smartCopy(x, setExToNone=False, keyMapper=lambda key : key, valMapper=lambda key, val : val):
     if not isinstance(x, dict):
-        return _unwrapWithCopy(x, smartCopy, setExToNone, keyMapper, valMapper)
+        newVal = valMapper(None, x)
+        try:
+            return _unwrapWithCopy(newVal, smartCopy, setExToNone, keyMapper, valMapper)
+        except Exception:
+            return None
     xNew = {}
     for key, val in x.items():
         try:
@@ -890,6 +894,8 @@ def smartDump(x, setExToNone=False):
 
 # # load from YAML like format
 # def smartLoad(xTxt, creator):
+#     def valMapper(key, val, creator):
+#         if creator is None:
 
 # YAML Validation
 class Yaml:
