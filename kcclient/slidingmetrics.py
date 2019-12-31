@@ -67,7 +67,7 @@ class SlidingMetrics():
         self.bits = bits
 
     def dump(self):
-        o = utils.smartCopy(self) # copy so object not modified
+        o = utils.smartDump(self) # copy so object not modified
         o.pop("lock", None)
         return o
 
