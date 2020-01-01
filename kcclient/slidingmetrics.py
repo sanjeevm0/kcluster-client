@@ -66,13 +66,13 @@ class SlidingMetrics():
 
         self.bits = bits
 
-    def dump(self):
-        o = utils.smartDump(self) # copy so object not modified
+    def __dump__(self):
+        o = copy.deepcopy(self.__dict__)
         o.pop("lock", None)
         return o
 
     @staticmethod
-    def load(o):
+    def __load__(o):
         x = SlidingMetrics(10, 20, Input.Value, bits=32)
         o = copy.deepcopy(o)
         for key, val in o.items():
