@@ -854,48 +854,102 @@ def camelizeKeys(d, upperCaseFirst=False):
         dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
     return dNew
 
-def _unwrapWithCopy(elem, fn, *args):
-    if isinstance(elem, (tuple, list, set, frozenset)):
-        return [_unwrap(v, fn, *args) for v in elem]
-    elif isinstance(elem, dict):
-        return fn(elem, *args)
+def _smartDump(xKey, x, setExToNone, keyMapper, valMapper, seenVals):
+    idx = id(x)
+    xNew = None
+    if idx in seenVals:
+        xNew = {'__ptr__': idx} # pointer to something already seen
+    elif hasattr(x, '__dump__'):
+        seenVals[idx] = True
+        xVals = x.__dump__()
+    elif hasattr(x, '__dict__'):
+        seenVals[idx] = True
+        xVals, _ = _smartDump(None, x.__dict__, setExToNone, keyMapper, valMapper, seenVals)
+    elif isinstance(x, (tuple, list, set, frozenset)):
+        seenVals[idx] = True
+        xVals = []
+        for v in x:
+            vNew, ex = _smartDump(None, v, setExToNone, keyMapper, valMapper, seenVals)
+            if ex is None:
+                xVals.append(vNew)
+            elif setExToNone:
+                xVals.append(None)
+    elif isinstance(x, dict):
+        seenVals[idx] = True
+        xVals = {}
+        for k, v in x.items():
+            try:
+                newK = keyMapper(k)
+            except Exception:
+                continue
+            vNew, ex = _smartDump(newK, v, setExToNone, keyMapper, valMapper, seenVals)
+            if ex is None:
+                xVals[newK] = vNew
+            elif setExToNone:
+                xVals[newK] = None
     else:
-        return copy.deepcopy(elem)
+        # shallow copy or numeric type, keep it raw
+        try:
+            return valMapper(xKey, x), None
+        except Exception as ex:
+            return None, ex
 
-def smartCopy(x, setExToNone=False, keyMapper=lambda key : key, valMapper=lambda key, val : val):
-    if not isinstance(x, dict):
-        newVal = valMapper(None, x)
-        try:
-            return _unwrapWithCopy(newVal, smartCopy, setExToNone, keyMapper, valMapper)
-        except Exception:
-            return None
-    xNew = {}
-    for key, val in x.items():
-        try:
-            newKey = keyMapper(key)
-        except Exception:
-            continue
-        try:
-            newVal = valMapper(newKey, val)
-            xNew[newKey] = _unwrapWithCopy(newVal, smartCopy, setExToNone, keyMapper, valMapper)
-        except Exception:
-            if setExToNone:
-                xNew[newKey] = None # any exception results in None
-    return xNew
+    if xNew is None:
+        xNew = {
+            '__idx__': idx,
+            '__type__': type(x),
+            '__val__': xVals,
+        }
+    xNew.update({
+        'magicNum': "E94F6C5C-51E6-427D-9345-E00BF14D11E8"
+    })
 
-# convert to YAML like format
+    return xNew, None
+
 def smartDump(x, setExToNone=False):
-    def valMapper(key, val):
-        try:
-            return val.__dict__ # for classes
-        except Exception:
-            return val
-    return smartCopy(x, setExToNone=setExToNone, valMapper=valMapper)
+    dmp, ex = _smartDump(None, x, setExToNone, lambda key : key, lambda key, val : copy.deepcopy(val), {})
+    if ex is not None:
+        raise ex
+    else:
+        return dmp
 
-# # load from YAML like format
-# def smartLoad(xTxt, creator):
-#     def valMapper(key, val, creator):
-#         if creator is None:
+def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals):
+    if not isinstance(x, dict) or x.get("magicNum", 0) != "E94F6C5C-51E6-427D-9345-E00BF14D11E8":
+        return valUnmapper(xKey, x)
+
+    ptr = x.get('__ptr__', None)
+    if ptr in seenVals:
+        return seenVals[ptr]
+
+    idx = x['__idx__']
+    tp = x['__type__']    
+    val = x['__val__']
+
+    if hasattr(tp, '__dump__') or hasattr(tp, '__load__'):
+        # arbitrary class, must have __load__ method to load from dictionary or class with __dump__
+        xNew = tp.__load__(val) # static method which loads from value
+        seenVals[idx] = xNew
+        return xNew
+
+    if tp in [tuple, list, set, frozenset]:
+        xNew = []
+        seenVals[idx] = xNew # set up front so reference inside can be used
+        for v in val:
+            xNew.append(_smartLoad(None, v, keyUnmapper, valUnmapper, seenVals))
+        return xNew
+
+    if tp in [dict]:
+        xNew = {}
+        seenVals[idx] = xNew
+        for k, v in val.items():
+            newK = keyUnmapper(k)
+            xNew[newK] = _smartLoad(newK, v, keyUnmapper, valUnmapper, seenVals)
+        return xNew
+
+    raise Exception("Unknown type to unmarshal {0}".format(tp))
+
+def smartLoad(x):
+    return _smartLoad(None, x, lambda key : key, lambda key, val : val, {})
 
 # YAML Validation
 class Yaml:
