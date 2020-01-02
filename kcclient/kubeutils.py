@@ -837,20 +837,25 @@ def GetApiServerList(clusterId, apiPodPrefix='kube-apiserver-', apiPodNs='kube-s
                 logger.info("APIServerPod: {0} {1} {2} - search for node {3}".format(nodeName, hostIp, hostPort, nodeName))
                 for node in nodes.items:
                     if nodeName == node.metadata.name:
+                        # order of precedence: externalIP -> fqdn in labels -> externalIP in labels
                         logger.info("RunningOnNode {0}".format(nodeName))
+                        externalIPFound = False
                         for addr in node.status.addresses:
                             if addr.type == "ExternalIP":
                                 serverName = "https://{0}:{1}".format(addr.address, hostPort)
                                 servers.append(serverName)
                                 logger.info("Using ExternalIP {0}".format(serverName))
+                                externalIPFound = True
                                 break
-                        if 'fqdn' in node.metadata.annotations:
-                            serverName = "https://{0}:{1}".format(node.metadata.annotations['fqdn'], hostPort)
-                            servers.append(serverName)
-                            logger.info("Using fqdn from annotation {0}".format(serverName))
+                        if externalIPFound:
                             break
-                        if 'externalIP' in node.metadata.annotations:
-                            serverName = "https://{0}:{1}".format(node.metadata.annotations['externalIP'], hostPort)
+                        if 'fqdn' in node.metadata.labels:
+                            serverName = "https://{0}:{1}".format(node.metadata.labels['fqdn'], hostPort)
+                            servers.append(serverName)
+                            logger.info("Using fqdn from label {0}".format(serverName))
+                            break
+                        if 'externalIP' in node.metadata.labels:
+                            serverName = "https://{0}:{1}".format(node.metadata.labels['externalIP'], hostPort)
                             servers.append(serverName)
                             logger.info("Using externalIP from annotation {0}".format(serverName))
                             break
