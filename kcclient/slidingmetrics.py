@@ -256,6 +256,7 @@ class SlidingMetrics():
             else:
                 return self.tsN - self.ts0
 
+utils.registerEval('SlidingMetrics', SlidingMetrics)
 # ============================
 # Testing
 
