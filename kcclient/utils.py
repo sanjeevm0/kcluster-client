@@ -913,7 +913,7 @@ def smartDump(x, setExToNone=False):
     else:
         return dmp
 
-def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals):
+def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals, toDict):
     if not isinstance(x, dict) or x.get("magicNum", 0) != "E94F6C5C-51E6-427D-9345-E00BF14D11E8":
         return valUnmapper(xKey, x)
 
@@ -926,16 +926,19 @@ def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals):
     val = x['__val__']
 
     if hasattr(tp, '__dump__') or hasattr(tp, '__load__'):
-        # arbitrary class, must have __load__ method to load from dictionary or class with __dump__
-        xNew = tp.__load__(val) # static method which loads from value
-        seenVals[idx] = xNew
-        return xNew
+        if not toDict:
+            # arbitrary class, must have __load__ method to load from dictionary or class with __dump__
+            xNew = tp.__load__(val) # static method which loads from value
+            seenVals[idx] = xNew
+            return xNew
+        else:
+            tp = dict # change type to dictionary
 
     if tp in [tuple, list, set, frozenset]:
         xNew = []
         seenVals[idx] = xNew # set up front so reference inside can be used
         for v in val:
-            xNew.append(_smartLoad(None, v, keyUnmapper, valUnmapper, seenVals))
+            xNew.append(_smartLoad(None, v, keyUnmapper, valUnmapper, seenVals, False)) # set toDict to false
         return xNew
 
     if tp in [dict]:
@@ -943,13 +946,13 @@ def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals):
         seenVals[idx] = xNew
         for k, v in val.items():
             newK = keyUnmapper(k)
-            xNew[newK] = _smartLoad(newK, v, keyUnmapper, valUnmapper, seenVals)
+            xNew[newK] = _smartLoad(newK, v, keyUnmapper, valUnmapper, seenVals, False)
         return xNew
 
     raise Exception("Unknown type to unmarshal {0}".format(tp))
 
-def smartLoad(x):
-    return _smartLoad(None, x, lambda key : key, lambda key, val : val, {})
+def smartLoad(x, toDict=False):
+    return _smartLoad(None, x, lambda key : key, lambda key, val : val, {}, toDict)
 
 # YAML Validation
 class Yaml:

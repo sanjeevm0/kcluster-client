@@ -75,7 +75,7 @@ class SlidingMetrics():
     @staticmethod
     def __load__(o):
         x = SlidingMetrics(10, 20, Input.Value, bits=32)
-        o = copy.deepcopy(o)
+        o = utils.smartLoad(o, True)
         for key, val in o.items():
             setattr(x, key, val)
         x.inputType = eval(x.inputType) # convert back
