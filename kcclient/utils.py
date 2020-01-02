@@ -897,7 +897,7 @@ def _smartDump(xKey, x, setExToNone, keyMapper, valMapper, seenVals):
     if xNew is None:
         xNew = {
             '__idx__': idx,
-            '__type__': type(x),
+            '__type__': type(x).__name__, # a string
             '__val__': xVals,
         }
     xNew.update({
@@ -922,7 +922,7 @@ def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals):
         return seenVals[ptr]
 
     idx = x['__idx__']
-    tp = x['__type__']    
+    tp = eval(x['__type__']) # convert back to type
     val = x['__val__']
 
     if hasattr(tp, '__dump__') or hasattr(tp, '__load__'):
