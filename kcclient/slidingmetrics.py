@@ -69,6 +69,7 @@ class SlidingMetrics():
     def __dump__(self):
         o = copy.deepcopy(self.__dict__)
         o.pop("lock", None)
+        o["inputType"] = str(o["inputType"])
         return o
 
     @staticmethod
@@ -77,6 +78,7 @@ class SlidingMetrics():
         o = copy.deepcopy(o)
         for key, val in o.items():
             setattr(x, key, val)
+        x.inputType = eval(x.inputType) # convert back
         return x
 
     def _resetCumu(self):
