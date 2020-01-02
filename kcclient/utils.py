@@ -913,9 +913,9 @@ def smartDump(x, setExToNone=False):
     else:
         return dmp
 
-def loadEvals = {} # registered evaluations
+_loadEvals = {} # registered evaluations
 def registerEval(name, tp):
-    loadEvals[name] = tp
+    _loadEvals[name] = tp
 
 def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals, toDict):
     if not isinstance(x, dict) or x.get("magicNum", 0) != "E94F6C5C-51E6-427D-9345-E00BF14D11E8":
@@ -926,8 +926,8 @@ def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals, toDict):
         return seenVals[ptr]
 
     idx = x['__idx__']
-    if x['__type__'] in loadEvals:
-        tp = loadEvals[x['__type__']]
+    if x['__type__'] in _loadEvals:
+        tp = _loadEvals[x['__type__']]
     else:
         tp = eval(x['__type__']) # convert back to type
     val = x['__val__']
