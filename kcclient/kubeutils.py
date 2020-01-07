@@ -640,12 +640,15 @@ def totalPodReqs(pod):
 # returns whether or not pod has been scheduled onto a node (e.g. assigned a node), and if assigned the hostIP, and nodeName
 def podScheduled(pod):
     # don't use pod phase as it is inaccurate
-    for c in pod.status.conditions:
-        if c.type == "PodScheduled" and c.status in [True, "True"]:
-            return (True, pod.status.host_ip, pod.spec.node_name)
+    if pod.status is not None and pod.status.conditions is not None:
+        for c in pod.status.conditions:
+            if c.type == "PodScheduled" and c.status in [True, "True"]:
+                return (True, pod.status.host_ip, pod.spec.node_name)
     return (False, None, None)
 
 def podRunning(pod):
+    if pod.status is None or pod.status.conditions is None:
+        return False
     if pod.status.phase != "Running":
         return False
     for c in pod.status.conditions:
