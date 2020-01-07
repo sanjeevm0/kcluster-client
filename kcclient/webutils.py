@@ -2,13 +2,14 @@ import yaml
 import json
 import os
 import sys
-import utils
 thisPath = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(thisPath)
 from urllib.parse import urlencode, urlparse, urlunparse, ParseResult, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 import random
 import copy
+import utils
 
 oidc = {
     "google" : {
