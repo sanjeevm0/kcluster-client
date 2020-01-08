@@ -56,10 +56,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
 # JWT
 import jwt
-from cryptography.x509 import load_pem_x509_certificate
-from cryptography.hazmat.backends import default_backend
 
 def validateMSFTJWT(token):
+    from cryptography.x509 import load_pem_x509_certificate
+    from cryptography.hazmat.backends import default_backend
+
     token_header = jwt.get_unverified_header(token)
     # Get keys
     res = requests.get("https://login.microsoftonline.com/common/discovery/v2.0/keys")
