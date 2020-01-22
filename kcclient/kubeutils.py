@@ -1149,7 +1149,7 @@ class Cluster:
         self.methods = {}
 
     def tracker(self, *args, **kwargs):
-        return ObjTracker(*args, **kwargs, servers=self.serversFixed, serverFile=self.serverFileFixed,
+        return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
             base=self.base, ca=self.ca, cert=self.cert, key=self.key)
 
     def getApiClient(self, server):
