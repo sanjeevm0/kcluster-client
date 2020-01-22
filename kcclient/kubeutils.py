@@ -1000,92 +1000,6 @@ def WatchObjClusterThread(threadName, sharedCtx, *args, **kwargs):
     _watcherThreadStart(t, finisher, **kwargs)
     return t
 
-# Supports token (e.g. service token, and TLS certs for auth)
-class Cluster:    
-    def __init__(self, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None):
-        self.api_key = api_key
-        self.base = base
-        self.ca = ca
-        self.cert = cert
-        self.key = key
-        self.serversFixed = servers
-        self.serverFileFixed = serverFile
-        self.clients = {}
-        self.methods = {}
-
-    def getApiClient(self, server):
-        if server not in self.clients:
-            cfg = kclient.Configuration()
-            cfg.verify_ssl = False
-            if self.api_key is not None:
-                cfg.api_key['authorization'] = self.api_key # a token
-                cfg.api_key_prefix['authorization'] = 'Bearer'
-            else:
-                cfg.ssl_ca_cert = "{0}/{1}".format(self.base, self.ca)
-                cfg.cert_file = "{0}/{1}".format(self.base, self.cert)
-                cfg.key_file = "{0}/{1}".format(self.base, self.key)
-            cfg.host = server
-            self.clients[server] = kclient.ApiClient(cfg)
-        return self.clients[server]
-
-    def getMethod(self, server, method):
-        #print("Server={0} Method={1}".format(server, method))
-        ret = utils.getValK(self.methods, [server, method])
-        if ret is not None:
-            (client, methodFn) = ret
-            #print("methodFn={0}".format(methodFn))
-            if methodFn is not None:
-                return methodFn
-        elem = _findMethodElem(method)
-        #print(elem)
-        apiClient = self.getApiClient(server)
-        #print(apiClient)
-        client = eval("{0}(apiClient)".format(elem))
-        #print(client)
-        methodFn = eval('client.'+method) # a function in the instantiated class
-        #print(methodFn)
-        utils.setValK(self.methods, [server, method], (client, methodFn))
-        return methodFn
-
-    def call_api_server(self, *args, **kwargs):
-        server = kwargs.pop('server')
-        apiClient = self.getApiClient(server)
-        #print("Call API with: {0} {1}".format(args, kwargs))
-        return apiClient.call_api(*args, **kwargs)
-
-    def call_api(self, *args, 
-                 auth_settings=['BearerToken'],
-                 header_params={'Accept': 'application/json', 'Content-Type': 'application/json'},
-                 response_type='object',
-                 async_req=False,
-                 _return_http_data_only=True,
-                 _preload_content=True, **kwargs):
-                 # body if needed, post_params, files, _request_timeout, collection_formats (if needed):
-        if self.serverFileFixed:
-            kwargs.update({'serverFile': self.serverFileFixed})
-        if self.serversFixed:
-            kwargs.update({'servers': self.serversFixed})
-        return DoOnServers(self.call_api_server, *args, auth_settings=auth_settings, header_params=header_params, 
-            response_type=response_type, async_req=async_req, _return_http_data_only=_return_http_data_only,
-            _preload_content=_preload_content, **kwargs)
-
-    def call_method_server(self, method, *args, **kwargs):
-        server = kwargs.pop('server')
-        #print(server)
-        methodFn = self.getMethod(server, method)
-        return methodFn(*args, **kwargs)
-
-    def call_method(self, method, *args, **kwargs):
-        if self.serverFileFixed:
-            kwargs.update({'serverFile': self.serverFileFixed})
-        if self.serversFixed:
-            kwargs.update({'servers': self.serversFixed})
-        return DoOnServers(self.call_method_server, method, *args, **kwargs)
-
-    def call_method1(self, method, *args, **kwargs):
-        servers = getServers(self.serverFileFixed, self.serversFixed)
-        return self.call_method_server(method, *args, **kwargs, server=servers[0])
-
 # Object tracker
 class ObjTracker:
     #(sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
@@ -1219,6 +1133,97 @@ class ObjTracker:
                 WatchObjClusterThread("ObjTracker-{0}-{1}".format(self.clusterName, self.lister), self.sharedCtx, self.trackObj, *self.args, 
                     finisher=self.finished, disconnect=self.disconnect, **self.kwargs)
                 self.started = True
+
+# Supports token (e.g. service token, and TLS certs for auth)
+class Cluster:
+    def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None):
+        self.name = name
+        self.api_key = api_key
+        self.base = base
+        self.ca = ca
+        self.cert = cert
+        self.key = key
+        self.serversFixed = servers
+        self.serverFileFixed = serverFile
+        self.clients = {}
+        self.methods = {}
+
+    def tracker(self, *args, **kwargs):
+        return ObjTracker(*args, **kwargs, servers=self.serversFixed, serverFile=self.serverFileFixed,
+            base=self.base, ca=self.ca, cert=self.cert, key=self.key)
+
+    def getApiClient(self, server):
+        if server not in self.clients:
+            cfg = kclient.Configuration()
+            cfg.verify_ssl = False
+            if self.api_key is not None:
+                cfg.api_key['authorization'] = self.api_key # a token
+                cfg.api_key_prefix['authorization'] = 'Bearer'
+            else:
+                cfg.ssl_ca_cert = "{0}/{1}".format(self.base, self.ca)
+                cfg.cert_file = "{0}/{1}".format(self.base, self.cert)
+                cfg.key_file = "{0}/{1}".format(self.base, self.key)
+            cfg.host = server
+            self.clients[server] = kclient.ApiClient(cfg)
+        return self.clients[server]
+
+    def getMethod(self, server, method):
+        #print("Server={0} Method={1}".format(server, method))
+        ret = utils.getValK(self.methods, [server, method])
+        if ret is not None:
+            (client, methodFn) = ret
+            #print("methodFn={0}".format(methodFn))
+            if methodFn is not None:
+                return methodFn
+        elem = _findMethodElem(method)
+        #print(elem)
+        apiClient = self.getApiClient(server)
+        #print(apiClient)
+        client = eval("{0}(apiClient)".format(elem))
+        #print(client)
+        methodFn = eval('client.'+method) # a function in the instantiated class
+        #print(methodFn)
+        utils.setValK(self.methods, [server, method], (client, methodFn))
+        return methodFn
+
+    def call_api_server(self, *args, **kwargs):
+        server = kwargs.pop('server')
+        apiClient = self.getApiClient(server)
+        #print("Call API with: {0} {1}".format(args, kwargs))
+        return apiClient.call_api(*args, **kwargs)
+
+    def call_api(self, *args,
+                 auth_settings=['BearerToken'],
+                 header_params={'Accept': 'application/json', 'Content-Type': 'application/json'},
+                 response_type='object',
+                 async_req=False,
+                 _return_http_data_only=True,
+                 _preload_content=True, **kwargs):
+                 # body if needed, post_params, files, _request_timeout, collection_formats (if needed):
+        if self.serverFileFixed:
+            kwargs.update({'serverFile': self.serverFileFixed})
+        if self.serversFixed:
+            kwargs.update({'servers': self.serversFixed})
+        return DoOnServers(self.call_api_server, *args, auth_settings=auth_settings, header_params=header_params,
+            response_type=response_type, async_req=async_req, _return_http_data_only=_return_http_data_only,
+            _preload_content=_preload_content, **kwargs)
+
+    def call_method_server(self, method, *args, **kwargs):
+        server = kwargs.pop('server')
+        #print(server)
+        methodFn = self.getMethod(server, method)
+        return methodFn(*args, **kwargs)
+
+    def call_method(self, method, *args, **kwargs):
+        if self.serverFileFixed:
+            kwargs.update({'serverFile': self.serverFileFixed})
+        if self.serversFixed:
+            kwargs.update({'servers': self.serversFixed})
+        return DoOnServers(self.call_method_server, method, *args, **kwargs)
+
+    def call_method1(self, method, *args, **kwargs):
+        servers = getServers(self.serverFileFixed, self.serversFixed)
+        return self.call_method_server(method, *args, **kwargs, server=servers[0])
 
 def WatchNodesThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)
