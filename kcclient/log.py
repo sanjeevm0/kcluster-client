@@ -1,6 +1,7 @@
 import logging
 import sys
 import os
+import glob
 from os import path
 from pathlib import Path
 
@@ -32,3 +33,12 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
 def get_logger(loggerName=None):
     return loggers[loggerName]
 
+def delete_logs(searchFmt, numKeep=5):
+    files = glob.glob(searchFmt)
+    filesSorted = sorted(files, key=lambda f: -os.stat(f).st_mtime) # descending by time
+    # keep newest
+    for index in range(numKeep, len(filesSorted)):
+        try:
+            os.remove(filesSorted[index])
+        except Exception:
+            pass # don't care
