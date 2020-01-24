@@ -154,6 +154,12 @@ def waitForFile(file):
             break
         time.sleep(5)
 
+def waitForFileSudo(file):
+    while True:
+        if getoutput('sudo ls {0}'.format(file)) is not None:
+            break
+        time.sleep(5)
+
 def getKeys(x):
     if x is not None:
         return x.keys()
