@@ -616,7 +616,7 @@ def convertAll(x, prevSuccess=True):
         return newSuccess, output
 
 # return requests and limits of pods, given 
-def totalPodReqs(pod):
+def totalPodReqs(pod, includeInitContainers=True):
     reqs = {}
     limits = {}
     success = True
@@ -627,13 +627,15 @@ def totalPodReqs(pod):
         limitsC = maxReqs(limitsC, reqsC) # limits is max
         reqs = combineReqs(reqs, reqsC)
         limits = combineReqs(limits, limitsC)
-    podC = utils.getValDef(pod, 'spec.initContainers')
-    for c in podC:
-        (success, reqsC) = convertAll(utils.getValDef(c, 'resources.requests'), success)
-        (success, limitsC) = convertAll(utils.getValDef(c, 'resources.limits'), success)
-        limitsC = maxReqs(limitsC, reqsC)
-        reqs = maxReqs(reqs, reqsC)
-        limits = maxReqs(limits, limitsC)
+
+    if includeInitContainers:
+        podC = utils.getValDef(pod, 'spec.initContainers')
+        for c in podC:
+            (success, reqsC) = convertAll(utils.getValDef(c, 'resources.requests'), success)
+            (success, limitsC) = convertAll(utils.getValDef(c, 'resources.limits'), success)
+            limitsC = maxReqs(limitsC, reqsC)
+            reqs = maxReqs(reqs, reqsC)
+            limits = maxReqs(limits, limitsC)
 
     return success, reqs, limits
 
