@@ -1002,6 +1002,14 @@ def WatchObjClusterThread(threadName, sharedCtx, *args, **kwargs):
     _watcherThreadStart(t, finisher, **kwargs)
     return t
 
+def getKind(o):
+    try:
+        if o.kind is not None:
+            return o.kind
+        return re.match(r'.*\.V.(.*)\'\>', str(type(o))).group(1)
+    except Exception:
+        return str(type(o))
+
 # Object tracker
 class ObjTracker:
     #(sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
@@ -1043,12 +1051,14 @@ class ObjTracker:
             objPrev = None
             if obj is not None:
                 objId = obj.metadata.uid
-                logger.info("{0}: {1}".format(event, obj.metadata.name))
+                logger.info("{0}: Cluster: {1} EvType: {2} Obj: {3}".format(getKind(obj), self.clusterName, event, obj.metadata.name))
                 logger.debug("{0}:\n{1}".format(event, obj))
                 if objId in self.objs:
                     objPrev = self.objs[objId]
                     objDiff = utils.diff(obj.to_dict(), self.objs[objId].to_dict(), False)
                     logger.debug("Diffs:{0}:\n{1}".format(event, objDiff))
+                else:
+                    logger.debug("Diffs: ObjectNotPresentBefore")
                 if event=="deleted":
                     if objId not in self.objs:
                         logger.error('Not present object being deleted - {0}'.format(obj))
