@@ -1148,17 +1148,52 @@ class ObjTracker:
 
 # Supports token (e.g. service token, and TLS certs for auth)
 class Cluster:
-    def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None):
+    def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, kubeconfig=None, serverFile=None,
+        kubeconfiguser=None, forceOverwrite=False):
         self.name = name
         self.api_key = api_key
-        self.base = base
-        self.ca = ca
-        self.cert = cert
-        self.key = key
-        self.serversFixed = servers
-        self.serverFileFixed = serverFile
+        if kubeconfig is not None:
+            self.loadFromKubeConfig(kubeconfig, kubeconfiguser, forceOverwrite=forceOverwrite)
+        else:
+            self.base = base
+            self.ca = ca
+            self.cert = cert
+            self.key = key
+            self.serversFixed = servers
+            self.serverFileFixed = serverFile
         self.clients = {}
         self.methods = {}
+
+    def loadFromKubeConfig(self, kubeconfig, kubeconfiguser, forceOverwrite=False):
+        ncfg = {}
+        self.base, _ = os.path.split(kubeconfig)
+        self.ca = "{0}-ca.pem".format(self.name)
+        self.cert = "{0}-cert.pem".format(self.name)
+        self.key = "{0}-key.pem".format(self.name)
+        self.serverFileFixed = None
+        caName = os.path.join(self.base, self.ca)
+        certName = os.path.join(self.base, self.cert)
+        keyName = os.path.join(self.base, self.key)
+        kconfig = utils.loadYaml(kubeconfig)
+        for c in kconfig['clusters']:
+            if c['name'] == self.name:
+                if not os.path.exists(caName) or forceOverwrite:
+                    with open(caName, "wt") as fp:
+                        fp.write(utils.b64d(c['cluster']['certificate-authority-data']))
+                self.serversFixed = [c['cluster']['server']]
+                utils.setValK(ncfg, ['clusters', 0], c)
+                break
+        for u in kconfig['users']:
+            if u['name'] == kubeconfiguser:
+                if not os.path.exists(certName) or forceOverwrite:
+                    with open(certName, "wt") as fp:
+                        fp.write(utils.b64d(u['user']['client-certificate-data']))
+                if not os.path.exists(keyName) or forceOverwrite:
+                    with open(keyName, "wt") as fp:
+                        fp.write(utils.b64d(u['user']['client-key-data']))
+                utils.setValK(ncfg, ['users', 0], u)
+                break
+        return ncfg
 
     def tracker(self, *args, **kwargs):
         return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
