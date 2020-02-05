@@ -1148,12 +1148,21 @@ class ObjTracker:
 
 # Supports token (e.g. service token, and TLS certs for auth)
 class Cluster:
-    def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, kubeconfig=None, serverFile=None,
-        kubeconfiguser=None, forceOverwrite=False):
+    def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None,
+        kubeconfig=None, kubeconfigYaml=None, kubeconfiguser=None, forceOverwrite=False, inPodCluster=False):
         self.name = name
         self.api_key = api_key
-        if kubeconfig is not None:
-            self.loadFromKubeConfig(kubeconfig, kubeconfiguser, forceOverwrite=forceOverwrite)
+        if inPodCluster:
+            with open('/var/run/secrets/kubernetes.io/serviceaccount/token') as fp:
+                token = fp.read()
+            self.api_key = token
+            self.serversFixed = ["https://{0}:{1}".format(os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_PORT_443_TCP_PORT"])]
+        elif kubeconfig is not None or kubeconfigYaml is not None:
+            self.kubeconfig = kubeconfig
+            self.kubeconfigYaml = kubeconfigYaml
+            self.kubeconfiguser = kubeconfiguser
+            self.forceOverwrite = forceOverwrite
+            self.loadFromKubeConfig()
         else:
             self.base = base
             self.ca = ca
@@ -1164,9 +1173,12 @@ class Cluster:
         self.clients = {}
         self.methods = {}
 
-    def loadFromKubeConfig(self, kubeconfig, kubeconfiguser, forceOverwrite=False):
+    def loadFromKubeConfig(self):
         ncfg = {}
-        self.base, _ = os.path.split(kubeconfig)
+        if self.kubeconfig is not None:
+            self.base, _ = os.path.split(self.kubeconfig)
+        else:
+            self.base = tempfile.gettempdir()
         self.ca = "{0}-ca.pem".format(self.name)
         self.cert = "{0}-cert.pem".format(self.name)
         self.key = "{0}-key.pem".format(self.name)
@@ -1174,21 +1186,29 @@ class Cluster:
         caName = os.path.join(self.base, self.ca)
         certName = os.path.join(self.base, self.cert)
         keyName = os.path.join(self.base, self.key)
-        kconfig = utils.loadYaml(kubeconfig)
+        if self.kubeconfig is not None:
+            kconfig = utils.loadYaml(self.kubeconfig)
+        else:
+            kconfig = self.kubeconfigYaml
+            self.forceOverwrite = True
+            # try best to remove these at exit
+            atexit.register(os.remove, caName)
+            atexit.register(os.remove, certName)
+            atexit.register(os.remove, keyName)
         for c in kconfig['clusters']:
             if c['name'] == self.name:
-                if not os.path.exists(caName) or forceOverwrite:
+                if not os.path.exists(caName) or self.forceOverwrite:
                     with open(caName, "wt") as fp:
                         fp.write(utils.b64d(c['cluster']['certificate-authority-data']))
                 self.serversFixed = [c['cluster']['server']]
                 utils.setValK(ncfg, ['clusters', 0], c)
                 break
         for u in kconfig['users']:
-            if u['name'] == kubeconfiguser:
-                if not os.path.exists(certName) or forceOverwrite:
+            if self.kubeconfiguser is None or u['name'] == self.kubeconfiguser: # if username is None, take first user
+                if not os.path.exists(certName) or self.forceOverwrite:
                     with open(certName, "wt") as fp:
                         fp.write(utils.b64d(u['user']['client-certificate-data']))
-                if not os.path.exists(keyName) or forceOverwrite:
+                if not os.path.exists(keyName) or self.forceOverwrite:
                     with open(keyName, "wt") as fp:
                         fp.write(utils.b64d(u['user']['client-key-data']))
                 utils.setValK(ncfg, ['users', 0], u)
