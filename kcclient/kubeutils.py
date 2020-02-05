@@ -1156,6 +1156,7 @@ class Cluster:
             with open('/var/run/secrets/kubernetes.io/serviceaccount/token') as fp:
                 token = fp.read()
             self.api_key = token
+            self.serverFileFixed =  None
             self.serversFixed = ["https://{0}:{1}".format(os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_PORT_443_TCP_PORT"])]
         elif kubeconfig is not None or kubeconfigYaml is not None:
             self.kubeconfig = kubeconfig
