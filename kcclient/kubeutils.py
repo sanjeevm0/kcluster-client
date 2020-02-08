@@ -1174,6 +1174,12 @@ class Cluster:
         self.clients = {}
         self.methods = {}
 
+    @staticmethod
+    def aksname(resgrp, name):
+        kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
+        kubeconfiguser = 'clusterUser_{0}_{1}'.format(resgrp, name)
+        return Cluster(name=name, kubeconfig=kubeconfig, kubeconfiguser=kubeconfiguser)
+
     def loadFromKubeConfig(self):
         ncfg = {}
         if self.kubeconfig is not None:
