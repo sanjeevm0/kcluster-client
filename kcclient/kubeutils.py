@@ -754,7 +754,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         if done:
             w.stop()
             return
-    if ('timeout_seconds' not in thread.selfCtx or
+    if ('timeout_seconds' not in thread.selfCtx or thread.selfCtx['timeout_seconds'] <= 0 or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
         logger.info("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
         thread.selfCtx['repeat'] = True
@@ -1012,7 +1012,7 @@ def getKind(o):
 
 # Object tracker
 class ObjTracker:
-    #(sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
+    #(sharedCtx, stopLoop, callback, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
     # args encompasses: stopLoop, lister
     # callback is additional callback after trackObjs is called, finisher is additional finisher
     # kwargs includes: apiPodPrefix, apiPodNs, additional **kwargs
@@ -1152,9 +1152,11 @@ class Cluster:
         kubeconfig=None, kubeconfigYaml=None, kubeconfiguser=None, forceOverwrite=False, inPodCluster=False):
         self.name = name
         self.api_key = api_key
+        self.inPodCluster = inPodCluster
         if inPodCluster:
             with open('/var/run/secrets/kubernetes.io/serviceaccount/token') as fp:
                 token = fp.read()
+            self.name = "InPodCluster"
             self.api_key = token
             self.serverFileFixed =  None
             self.serversFixed = ["https://{0}:{1}".format(os.environ["KUBERNETES_SERVICE_HOST"], os.environ["KUBERNETES_PORT_443_TCP_PORT"])]
@@ -1222,9 +1224,15 @@ class Cluster:
                 break
         return ncfg
 
+    # args = (sharedCtx, toStop, listMethod)
     def tracker(self, *args, **kwargs):
-        return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
-            base=self.base, ca=self.ca, cert=self.cert, key=self.key)
+        if self.inPodCluster:
+            _, client, _ = self.getMethodAndClient(self.serversFixed[0], args[2])
+            return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
+                client=client)
+        else:
+            return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
+                base=self.base, ca=self.ca, cert=self.cert, key=self.key)
 
     def getApiClient(self, server):
         if server not in self.clients:
@@ -1241,7 +1249,7 @@ class Cluster:
             self.clients[server] = kclient.ApiClient(cfg)
         return self.clients[server]
 
-    def getMethod(self, server, method):
+    def getMethodAndClient(self, server, method):
         #print("Server={0} Method={1}".format(server, method))
         ret = utils.getValK(self.methods, [server, method])
         if ret is not None:
@@ -1258,6 +1266,10 @@ class Cluster:
         methodFn = eval('client.'+method) # a function in the instantiated class
         #print(methodFn)
         utils.setValK(self.methods, [server, method], (client, methodFn))
+        return apiClient, client, methodFn
+
+    def getMethod(self, server, method):
+        _, _, methodFn = self.getMethodAndClient(server, method)
         return methodFn
 
     def call_api_server(self, *args, **kwargs):
