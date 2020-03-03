@@ -964,7 +964,7 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
             t.join()
             if stopLoop():
                 return
-            if 'timeout_seconds' in kwargs and time.time()-startTime > kwargs['timeout_seconds']:
+            if 'timeout_seconds' in kwargs and kwargs['timeout_seconds'] > 0 and time.time()-startTime > kwargs['timeout_seconds']:
                 return
             if serversChanged:
                 break # break the enumeration over servers
