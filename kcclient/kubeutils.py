@@ -1253,10 +1253,10 @@ class Cluster:
         #print("Server={0} Method={1}".format(server, method))
         ret = utils.getValK(self.methods, [server, method])
         if ret is not None:
-            (client, methodFn) = ret
+            (apiClient, client, methodFn) = ret
             #print("methodFn={0}".format(methodFn))
-            if methodFn is not None:
-                return methodFn
+            if apiClient is not None and client is not None and methodFn is not None:
+                return apiClient, client, methodFn
         elem = _findMethodElem(method)
         #print(elem)
         apiClient = self.getApiClient(server)
@@ -1265,7 +1265,7 @@ class Cluster:
         #print(client)
         methodFn = eval('client.'+method) # a function in the instantiated class
         #print(methodFn)
-        utils.setValK(self.methods, [server, method], (client, methodFn))
+        utils.setValK(self.methods, [server, method], (apiClient, client, methodFn))
         return apiClient, client, methodFn
 
     def getMethod(self, server, method):
