@@ -278,9 +278,17 @@ def generate_adhoc_ssl_context(cn=None, hosts=None):
 def verify_cert(cert, trusted_certs):
     from OpenSSL import crypto
 
+    def load(f):
+        with open(f, 'rb') as fp:
+            return fp.read()
+
     store = crypto.X509Store()
     for trusted_cert in trusted_certs:
-        store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, trusted_cert))
+        store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, load(trusted_cert)))
 
-    ctx = crypto.X509StoreContext(store, crypto.load_certificate(crypto.FILETYPE_PEM, cert))
-    return store_ctx.verify_certificate() is None
+    ctx = crypto.X509StoreContext(store, crypto.load_certificate(crypto.FILETYPE_PEM, load(cert)))
+    try:
+        return ctx.verify_certificate() is None
+    except Exception as e:
+        return False
+
