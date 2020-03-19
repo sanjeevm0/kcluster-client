@@ -252,7 +252,7 @@ class SSLContext(object):
 def load_ssl_context(cert_file, pkey_file=None, protocol=None):
     if protocol is None:
         protocol = ssl.PROTOCOL_SSLv23
-    ctx = SSLContext(protocol)
+    ctx = ssl.SSLContext(protocol)
     ctx.load_cert_chain(cert_file, pkey_file)
     return ctx
 
@@ -274,3 +274,13 @@ def generate_adhoc_ssl_context(cn=None, hosts=None):
     os.close(pkey_handle)
     ctx = load_ssl_context(cert_file, pkey_file)
     return ctx
+
+def verify_cert(cert, trusted_certs):
+    from OpenSSL import crypto
+
+    store = crypto.X509Store()
+    for trusted_cert in trusted_certs:
+        store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, trusted_cert))
+
+    ctx = crypto.X509StoreContext(store, crypto.load_certificate(crypto.FILETYPE_PEM, cert))
+    return store_ctx.verify_certificate() is None
