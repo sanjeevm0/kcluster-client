@@ -292,3 +292,31 @@ def verify_cert(cert, trusted_certs):
     except Exception as e:
         return False
 
+def create_store(trusted_certs):
+    from OpenSSL import crypto
+
+    store = crypto.X509Store()
+    for trusted_cert in trusted_certs:
+        store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, trusted_cert))
+    return store
+
+def load_certs(sslctx, existcerts=[], tlsfiles=[]):
+    from OpenSSL import crypto
+
+    certs = []
+    for tmn in tlsfiles:
+        with open(tmn, 'rb') as fp:
+            certs.append(fp.read())
+
+    existcerts.extend(certs)
+    certs = existcerts
+
+    store = crypto.X509Store()
+    for cert in certs:
+        try:
+            sslctx.load_verify_locations(cert.decode())
+            store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, cert))
+        except Exception:
+            print("Unable to add certificate")
+
+    return store

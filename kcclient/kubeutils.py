@@ -1960,3 +1960,23 @@ def kubeLockRelease(lockName):
     clusterId = getClusterId()
     client, _ = getClientForMethod(clusterId, 'list_namespaced_pod')
     return kubeLockRelease1(client, lockName, podName, ns)
+
+def kubeLoadTLS(tlscm=[], cluster=None, ns=None):
+    if cluster is None:
+        c = Cluster(inPodCluster=True)
+    if ns is None:
+        ns = getPodNs()
+    certs = []
+    try:
+        cm = c.call_method('list_namespaced_configmap', namespace='kube-system', 
+            field_selector='metadata.name==extension-apiserver-authentication')
+        certs.append(str.encode(cm.data['requestheader-client-ca-file']))
+    except Exception:
+        print("Unable to laod extension-apiserver-authentication")
+    for cmn in tlscm:
+        try:
+            cm = c.call_method('list_namespaced_secret', namespace=ns, field_selector='metadata.name=={0}'.format(cmn))
+            certs.append(str.encode(cm.data['tls.crt']))
+        except Exception:
+            print("Unable to load {0}".format(cmn)
+    return certs
