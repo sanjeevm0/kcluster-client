@@ -313,10 +313,10 @@ def load_certs(sslctx, existcerts=[], tlsfiles=[]):
 
     store = crypto.X509Store()
     for cert in certs:
-        try:
-            sslctx.load_verify_locations(cert.decode())
+        #try:
+            sslctx.load_verify_locations(cadata=cert.decode())
             store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, cert))
-        except Exception:
-            print("Unable to add certificate")
+        #except Exception:
+        #    print("Unable to add certificate")
 
     return store
