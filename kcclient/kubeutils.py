@@ -1972,11 +1972,11 @@ def kubeLoadTLS(tlscm=[], cluster=None, ns=None):
             field_selector='metadata.name==extension-apiserver-authentication')
         certs.append(str.encode(cm.data['requestheader-client-ca-file']))
     except Exception:
-        print("Unable to laod extension-apiserver-authentication")
+        print("Unable to load extension-apiserver-authentication")
     for cmn in tlscm:
         try:
             cm = c.call_method('list_namespaced_secret', namespace=ns, field_selector='metadata.name=={0}'.format(cmn))
             certs.append(str.encode(cm.data['tls.crt']))
         except Exception:
-            print("Unable to load {0}".format(cmn)
+            print("Unable to load {0}".format(cmn))
     return certs
