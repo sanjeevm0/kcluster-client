@@ -570,6 +570,7 @@ def _getValK(x, key):
         index = key0
     elif key0[0]=='[' and key0[-1]==']':
         index = int(key0[1:-1])
+        key0 = index
     if index is not None and isinstance(x, list):
         if index >= -len(x) and index < len(x):
             v = x[index]
@@ -620,6 +621,7 @@ def _setValK(x, key, v):
         index = key0
     elif key0[0]=='[' and key0[-1]==']':
         index = int(key0[1:-1])
+        key0 = index
     if index is not None and isinstance(x, list):
         if index < -len(x):
             raise Exception("Invalid index")
