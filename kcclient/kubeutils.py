@@ -1182,6 +1182,15 @@ class Cluster:
         kubeconfiguser = 'clusterUser_{0}_{1}'.format(resgrp, name)
         return Cluster(name=name, kubeconfig=kubeconfig, kubeconfiguser=kubeconfiguser)
 
+    @staticmethod
+    def fromconfig(name, resgrp=None, user=None):
+        kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
+        if resgrp is not None:
+            kubeconfiguser = 'clusterUser_{0}_{1}'.format(resgrp, name)
+        else:
+            kubeconfiguser = user
+        return Cluster(name=name, kubeconfig=kubeconfig, kubeconfiguser=kubeconfiguser)
+
     def loadFromKubeConfig(self):
         ncfg = {}
         if self.kubeconfig is not None:
@@ -1310,6 +1319,14 @@ class Cluster:
     def call_method1(self, method, *args, **kwargs):
         servers = getServers(self.serverFileFixed, self.serversFixed)
         return self.call_method_server(method, *args, **kwargs, server=servers[0])
+
+def getClusterNs(aks=None, ns=None, name=None, user=None):
+    if aks is not None:
+        return Cluster.aksname(aks[0], aks[1]), ns
+    elif name is not None:
+        return Cluster.fromconfig(name, user=user)
+    else:
+        return Cluster(inPodCluster=True), getPodNs()
 
 def WatchNodesThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)
