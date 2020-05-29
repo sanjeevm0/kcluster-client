@@ -975,7 +975,7 @@ class Yaml:
     def validateVal(x, schema, msgs):
         if isinstance(schema, dict) and ('__validateExpr__' in schema or '__required__' in schema or '__value__' in schema):
             for key in schema:
-                if key not in ['__validateExpr__', '__required__', '__value__']:
+                if key not in ['__validateExpr__', '__required__', '__value__', '__default__']:
                     msgs.append('Invalid key found {0}'.format(key))
             try:
                 if '__validateExpr__' in schema and x is not None:
@@ -992,6 +992,8 @@ class Yaml:
                 msgs.append('{0} required value missing'.format(schema))
             if '__value__' in schema and x is not None:
                 Yaml.validateVal(x, schema['__value__'], msgs)
+            if '__default__' in schema and x is None:
+                return True
         elif x is not None:
             Yaml.validateVar(x, schema, msgs)
 
@@ -1026,9 +1028,14 @@ class Yaml:
                         Yaml.validateVal(val, schemaX['__validate__']['__validateVal__'], msgs)
                     else:
                         msgs.append('Key {0} is not a valid key'.format(key))
+                toAdd = {}
                 for schemaKey, schemaVal in schemaX.items():
                     if schemaKey not in x:
-                        Yaml.validateVal(None, schemaVal, msgs)
+                        toFill = Yaml.validateVal(None, schemaVal, msgs)
+                        if toFill:
+                            toAdd[schemaKey] = schemaVal['__default__']
+                for addKey, addVal in toAdd.items():
+                    x[addKey] = addVal
 
     @staticmethod
     def validate(x, schema):
