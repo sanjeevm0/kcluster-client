@@ -973,7 +973,7 @@ def smartLoad(x, toDict=False):
 class Yaml:
     @staticmethod
     def validateVal(x, schema, msgs):
-        if isinstance(schema, dict) and ('__validateExpr__' in schema or '__required__' in schema or '__value__' in schema):
+        if isinstance(schema, dict) and ('__validateExpr__' in schema or '__required__' in schema or '__value__' in schema or '__default__' in schema):
             for key in schema:
                 if key not in ['__validateExpr__', '__required__', '__value__', '__default__']:
                     msgs.append('Invalid key found {0}'.format(key))
@@ -989,6 +989,7 @@ class Yaml:
             if not isvalid:
                 msgs.append('{0} fails eval {1}'.format(x, schema['__validateExpr__']))
             if '__required__' in schema and schema['__required__'] and x is None:
+                #print(schema)
                 msgs.append('{0} required value missing'.format(schema))
             if '__value__' in schema and x is not None:
                 Yaml.validateVal(x, schema['__value__'], msgs)
@@ -1034,6 +1035,7 @@ class Yaml:
                         toFill = Yaml.validateVal(None, schemaVal, msgs)
                         if toFill:
                             toAdd[schemaKey] = schemaVal['__default__']
+                #print("ToAdd: {0}".format(toAdd))
                 for addKey, addVal in toAdd.items():
                     x[addKey] = addVal
 
