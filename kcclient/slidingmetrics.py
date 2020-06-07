@@ -81,6 +81,19 @@ class SlidingMetrics():
         x.inputType = eval(x.inputType) # convert back
         return x
 
+    def __serialize__(self, seenVals):
+        o = {}
+        for k, v in sorted(x.__dict__.items()):
+            if k not in ["lock", "inputType"]:
+                o[k] = utils.serialize(v, seenVals)
+        o["inputType"] = str(self["inputType"])
+
+    def __deserialize__(self, o, toDict, seenVals):
+        for k, v in sorted(o.items()):
+            if k not in ["lock", "inputType"]:
+                setattr(self, k, deserialize(v, toDict, seenVals))
+        self.inputType = eval(o["inputType"])
+
     def _resetCumu(self):
         amtToSub = self.cumu0
         if amtToSub==0:
@@ -257,6 +270,7 @@ class SlidingMetrics():
                 return self.tsN - self.ts0
 
 utils.registerEval('SlidingMetrics', SlidingMetrics)
+utils.registerCreate("SlidingMetric", lambda : SlidingMetrics(10, 20, Input.Value, bits=32))
 # ============================
 # Testing
 
