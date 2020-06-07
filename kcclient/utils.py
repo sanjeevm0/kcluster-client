@@ -901,7 +901,7 @@ def serialize(x, seenVals=None):
         return val
 
     if hasattr(x, '__serialize__'):
-        val.update({'__val__': x.__dump__(seenVals)})
+        val.update({'__val__': x.__serialize__(seenVals)})
         return val
 
     if hasattr(x, '__dict__'):
