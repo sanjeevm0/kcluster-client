@@ -908,7 +908,7 @@ def serialize(x, seenVals=None):
         val.update({'__val__': {k: serialize(v, seenVals) for k, v in sorted(x.__dict__.items())}})
         return val
 
-    raise Exception("Don't know how to serialize")
+    raise Exception("Don't know how to serialize {0}".format(x))
 
 def deserialize(o, toDict=False, seenVals=None):
     if seenVals is None:
@@ -970,7 +970,7 @@ def deserialize(o, toDict=False, seenVals=None):
             setattr(val, k, deserialize(v, toDict, seenVals))
         return val
 
-    raise Exception("Can't deserialize {0}".format(o))    
+    raise Exception("Don't know how to deserialize {0}".format(o))    
 
 def _smartDump(xKey, x, setExToNone, keyMapper, valMapper, seenVals):
     idx = id(x)
