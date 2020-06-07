@@ -862,6 +862,116 @@ def camelizeKeys(d, upperCaseFirst=False):
         dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
     return dNew
 
+# Text Type:	str
+# Numeric Types:	int, float, complex
+# Sequence Types:	list, tuple, range
+# Mapping Type:	dict
+# Set Types:	set, frozenset
+# Boolean Type:	bool
+# Binary Types:	bytes, bytearray, memoryview
+def serialize(x, seenVals=None):
+    if seenVals is None:
+        seenVals = {}
+
+    if isinstance(x, (str, int, float, complex, bool)) or x is None:
+        return x
+
+    idx = id(x)
+    if idx in seenVals:
+        return {'__ptr__': seenVals[idx]}
+
+    seenVals[idx] = len(seenVals)
+
+    tpName = type(x).__name__
+    val = {
+        '__type__': tpName,
+        '__idx__': seenVals[idx]
+    }
+
+    if isinstance(x, (bytes, bytearray)):
+        val.update({'__val__': base64.b64encode(x).decode()})
+        return val
+
+    if isinstance(x, (tuple, list, set, frozenset)):
+        val.update({'__val__': [serialize(v, seenVals) for v in x]})
+        return val
+
+    if isinstance(x, dict):
+        val.update({'__val__': {k: serialize(v, seenVals) for k, v in sorted(x.items())}})
+        return val
+
+    if hasattr(x, '__serialize__'):
+        val.update({'__val__': x.__dump__(seenVals)})
+        return val
+
+    if hasattr(x, '__dict__'):
+        val.update({'__val__': {k: serialize(v, seenVals) for k, v in sorted(x.__dict__.items())}})
+        return val
+
+    raise Exception("Don't know how to serialize")
+
+def deserialize(o, toDict=False, seenVals=None):
+    if seenVals is None:
+        seenVals = {}
+
+    if isinstance(o, (str, int, float, complex, bool)) or o is None:
+        return o
+
+    # everything else is dict
+
+    if '__ptr__' in o:
+        return seenVals[o['__ptr__']]
+
+    tpName = o['__type__']
+    ov = o['__val__']
+    idx = o['__idx__']
+    if tpName in _loadEvals:
+        tp = _loadEvals[tpName]
+    else:
+        tp = eval(tpName)
+
+    val = None
+
+    if tp in [tuple, list, set, frozenset]:
+        val = []
+    elif tp is dict or (hasattr(tp, '__dict__') and toDict):
+        val = {}
+    elif hasattr(tp, '__dict__'):
+        if tpName in _loadCreate:
+            val = _loadCreate[tpName]()
+        else:
+            val = tp()
+    seenVals[idx] = val # for recursive
+
+    if isinstance(val, (bytes, bytearray)):
+        val = tp(base64.b64decode(ov.encode()))
+        seenVals[idx] = val
+        return val
+
+    if isinstance(val, list):
+        for v in ov:
+            val.append(deserialize(v, toDict, seenVals))
+        if tp is not list:
+            val = tp(val) # may change 
+            seenVals[idx] = val # tuple, set, frozenset are not recursive
+        return val
+
+    if isinstance(val, dict):
+        for k, v in sorted(ov.items()):
+            val[k] = deserialize(v, toDict, seenVals)
+        return val
+
+    if hasattr(val, '__deserialize__'):
+        val.__deserialize__(ov, toDict, seenVals)
+        return val
+
+    if hasattr(val, '__dict__'):
+        for k, v in sorted(ov.items()):
+            setattr(val, k, deserialize(v, toDict, seenVals))
+        return val
+
+    raise Exception("Can't deserialize {0}".format(o))    
+
 def _smartDump(xKey, x, setExToNone, keyMapper, valMapper, seenVals):
     idx = id(x)
     xNew = None
@@ -922,8 +1032,11 @@ def smartDump(x, setExToNone=False):
         return dmp
 
 _loadEvals = {} # registered evaluations
+_loadCreate = {}
 def registerEval(name, tp):
     _loadEvals[name] = tp
+def registerCreate(name, fn):
+    _loadCreate[name] = fn
 
 def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals, toDict):
     if not isinstance(x, dict) or x.get("magicNum", 0) != "E94F6C5C-51E6-427D-9345-E00BF14D11E8":
