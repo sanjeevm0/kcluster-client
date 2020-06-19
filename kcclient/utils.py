@@ -228,6 +228,27 @@ def deepmerge3(orig, mod1, mod2):
             output[key] = copy.deepcopy(mod2[key])
     return output
 
+# mod has priority for same key
+def deepmerge(orig, mod):
+    if type(orig) != type(mod):
+        return copy.deepcopy(mod)
+    if isinstance(orig, list):
+        n = copy.deepcopy(orig)
+        n.extend(copy.deepcopy(mod))
+        return n
+    if isinstance(orig, dict):
+        n = {}
+        for k, v in orig.items():
+            if k in mod:
+                n[k] = deepmerge(v, mod[k])
+            else:
+                n[k] = copy.deepcopy(v)
+        for k, v in mod.items():
+            if k not in orig:
+                n[k] = copy.deepcopy(v)
+        return n
+    return copy.deepcopy(mod) # return mod for anything else
+
 def cmpE(x1, x2):
     if isinstance(x1, dict) and isinstance(x2, dict):
         return True
