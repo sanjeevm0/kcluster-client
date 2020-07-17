@@ -710,7 +710,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         if isinstance(initobjs, dict):
             initobjs = utils.ToClass(initobjs, True)
     except Exception as ex:
-        logger.error('_watchAndDo encounters exception:\n {0}'.format(ex))
+        logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
         return # don't set repeat to true, let it terminate
     init = {}
     for obj in initobjs.items:
@@ -1385,15 +1385,15 @@ def WatchAllPodsThreadClient(id, name, sharedCtx, clientFn, doFn, stopLoop=None)
     t.start()
     return t
 
-def watchAllDeploymentsAndDo(extClient, doFn, stopLoop=None):
-    listerFn = lambda : extClient.list_deployment_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(extClient.list_deployment_for_all_namespaces)
+def watchAllDeploymentsAndDo(appClient, doFn, stopLoop=None):
+    listerFn = lambda : appClient.list_deployment_for_all_namespaces()
+    watcherFn = lambda : _getWatchCtx(appClient.list_deployment_for_all_namespaces)
     _watchAndDo(listerFn, watcherFn, doFn, stopLoop)
 
 def WatchAllDeploymentsThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
-    extClient = createExtClient(deploydir, True)
-    listerFn = lambda : extClient.list_deployment_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(extClient.list_deployment_for_all_namespaces)
+    appClient = createAppClient(deploydir, True)
+    listerFn = lambda : appClient.list_deployment_for_all_namespaces()
+    watcherFn = lambda : _getWatchCtx(appClient.list_deployment_for_all_namespaces)
     t = ThreadFnR(id, name, sharedCtx, _watchAndDo, listerFn, watcherFn, doFn, stopLoop)
     t.daemon = True
     t.start()

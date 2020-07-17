@@ -11,6 +11,8 @@ sys.path.append(thisPath)
 import utils
 import webutils
 import re
+import tempfile
+import shutil
 
 def getUser(id, user):
     if user is None:        
@@ -74,6 +76,50 @@ def getKubeServers(cfgdir):
     servers = [re.sub('(.*):(.*)', '\g<1>:{0}'.format(serverInfo["k8sport"]), s) for s in servers]
     return servers
 
+def createKubeConfig(cfgdir, resp,
+    clustername='default-cluster', username='default-user', contextname='default-context'):
+
+    return {
+        'apiVersion': 'v1',
+        'kind': 'Config',
+        'clusters': [
+            {
+                'name': clustername,
+                'cluster': {
+                    'certificate-authority-data': utils.b64e(resp['CA']),
+                    'server': getKubeServers(cfgdir)[0]
+                }
+            }
+        ],
+        'users': [
+            {
+                'name': username,
+                'user': {
+                    'client-certificate-data': utils.b64e(resp['Cert']),
+                    'client-key-data':  utils.b64e(resp['Key']),
+                    'token': resp['token']
+                }
+            }
+        ],
+        'contexts': [
+            {
+                'name': contextname,
+                'context': {
+                    'cluster': clustername,
+                    'user': username
+                }
+            }
+        ],
+        'current-context': contextname
+    }
+
+def removeDups(old, name):
+    new = []
+    for i, x in enumerate(old):
+        if x['name'] != name:
+            new.append(x)
+    return new
+
 def dumpKubeCreds(user, resp, id):
     cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
     print("Writing {0} to {1}".format(resp, cfgdir))
@@ -85,40 +131,24 @@ def dumpKubeCreds(user, resp, id):
         fp.write(resp['Key'])
     with open('{0}/{1}-kube.config'.format(cfgdir, user), 'w') as fp:
         # create config file
-        cfg = {
-            'apiVersion': 'v1',
-            'kind': 'Config',
-            'clusters': [
-                {
-                    'name': 'default-cluster',
-                    'cluster': {
-                        'certificate-authority-data': utils.b64e(resp['CA']),
-                        'server': getKubeServers(cfgdir)[0]
-                    }
-                }
-            ],
-            'users': [
-                {
-                    'name': 'default-user',
-                    'user': {
-                        'client-certificate-data': utils.b64e(resp['Cert']),
-                        'client-key-data':  utils.b64e(resp['Key']),
-                        'token': resp['token']
-                    }
-                }
-            ],
-            'contexts': [
-                {
-                    'name': 'default-context',
-                    'context': {
-                        'cluster': 'default-cluster',
-                        'user': 'default-user'
-                    }
-                }
-            ],
-            'current-context': 'default-context'
-        }
-        yaml.safe_dump(cfg, fp)
+        yaml.safe_dump(createKubeConfig(cfgdir, resp), fp)
+    # also merge into kubeconfig
+    cname = getKubeServers(cfgdir)[0].split('//')[1].split('.')[0].split('-infra')[0]
+    uname = cname+'-'+user
+    kcfg = createKubeConfig(cfgdir, resp, clustername=cname, username=uname, contextname=uname)
+    basecfg = utils.getHome()+'/.kube/config'
+    if os.path.exists(basecfg):
+        baseYaml = utils.loadYaml(basecfg)
+        baseYaml['clusters'] = removeDups(baseYaml['clusters'], cname)
+        baseYaml['users'] = removeDups(baseYaml['users'], uname)
+        baseYaml['contexts'] = removeDups(baseYaml['contexts'], uname)
+        newYaml = utils.deepmerge(kcfg, baseYaml)
+        fd, name = tempfile.mkstemp()
+        utils.dumpYaml(newYaml, name)
+        print("merging configuration into {0}".format(basecfg))
+        shutil.copy(name, basecfg)
+        os.close(fd)
+        os.remove(name)
 
 def getServers(queryParams, server):
     resp = doAPIOper([server], None, "get", "servers", queryParams, None)
