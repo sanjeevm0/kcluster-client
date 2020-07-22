@@ -128,6 +128,39 @@ def connect_to_remote(host, identityFile=None):
     ssh_client.connect(hostname=host, username=user, key_filename=identityFile)
     return ssh_client
 
+def copyFile2(src, dstArg, homedir, numTry=10, pwd=None, id=None):
+    m = re.match("(.*):(.*)", dstArg)
+    if len(m.groups())==2:
+        loc = m.group(1)
+        dst = m.group(2)
+        dstDir = os.path.dirname(dst)
+        if pwd is not None:
+            prefix = "/usr/bin/sshpass -p '{0}' ".format(pwd)
+        else:
+            prefix = ""
+        if id is not None:
+            idFile = "-i '{0}'".format(id)
+        else:
+            idFile = ""
+        #mkdir
+        cmd = "{0}bash -c \"ssh {1} {2} 'sudo bash -s {3}' < {4}/mkdir.sh\"".format(prefix, idFile, loc, dstDir, thisPath)
+        print(cmd)
+        for i in range(numTry):
+            done = getoutput(cmd)
+            print(done)
+            if done=="DONE":
+                break
+        # now copy
+        tmpname = random_string(64)
+        cmd = "{0}bash -c \"sudo scp {1} {2} {3}:{4}/{5}\"".format(prefix, idFile, src, loc, homedir, tmpname)
+        print(cmd)
+        done = getoutput(cmd)
+        print(done)
+        cmd = "{0}bash -c \"ssh {1} {2} 'sudo mv {3}/{4} {5}'\"".format(prefix, idFile, loc, homedir, tmpname, dst)
+        print(cmd)
+        done = getoutput(cmd)
+        print(done)
+
 def copyFile(src, dstArg, numTry=20, pwd=None, identity_file=None):
     m = re.match("(.*)@(.*):(.*)", dstArg)
     if len(m.groups())==3:
