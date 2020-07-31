@@ -150,6 +150,8 @@ def copyFile2(src, dstArg, homedir, numTry=10, pwd=None, id=None):
             print(done)
             if done=="DONE":
                 break
+            else:
+                time.sleep(5.0) # wait and try again
         # now copy
         tmpname = random_string(64)
         cmd = "{0}bash -c \"sudo scp {1} {2} {3}:{4}/{5}\"".format(prefix, idFile, src, loc, homedir, tmpname)
