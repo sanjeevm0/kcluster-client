@@ -1177,6 +1177,23 @@ class Cluster:
         self.methods = {}
 
     @staticmethod
+    def addCmdArgs(parser):
+        parser.add_argument('--aksname', '-aksname', nargs='+', default=None, required=False, help="AKS cluster of form: <resourceGroup> <clusterName>")
+        parser.add_argument('--kcfg', '-kcfg', nargs='+', default=None, required=False, help="Kube config cluster of form: <kubeConfigFile> <clusterName> <clusterUser>")
+        parser.add_argument('--kcert', '-kcert', nargs='+', default=None, required=False, help="Kube certs of form: <Base> <CA> <Cert> <Key>")
+
+    @staticmethod
+    def fromCmdArgs(args):
+        if args.aksname is not None:
+            return Cluster.aksname(args.aksname[0], args.aksname[1])
+        elif args.kcfg is not None:
+            return Cluster(kubeconfig=args.kcfg[0], name=args.kcfg[1], kubeconfiguser=args.kcfg[2])
+        elif args.kcert is not None:
+            return Cluster(base=args.kcert[0], ca=args.kcert[1], cert=args.kcert[2], key=args.kcert[3])
+        else:
+            return Cluster(inPodCluster=True) # run from within a pod
+
+    @staticmethod
     def aksname(resgrp, name):
         kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
         kubeconfiguser = 'clusterUser_{0}_{1}'.format(resgrp, name)
