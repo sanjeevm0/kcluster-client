@@ -1190,7 +1190,7 @@ class Cluster:
         elif args.kcfg is not None:
             return Cluster(kubeconfig=args.kcfg[0], name=args.kcfg[1], kubeconfiguser=args.kcfg[2])
         elif args.kcert is not None:
-            return Cluster(servers=args.kcert[0], base=args.kcert[1], ca=args.kcert[2], cert=args.kcert[3], key=args.kcert[4])
+            return Cluster(servers=[args.kcert[0]], base=args.kcert[1], ca=args.kcert[2], cert=args.kcert[3], key=args.kcert[4])
         else:
             return Cluster(inPodCluster=True) # run from within a pod
 
