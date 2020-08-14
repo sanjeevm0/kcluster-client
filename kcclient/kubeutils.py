@@ -140,7 +140,8 @@ def _loadCfgCert2(server, base, ca, cert, key):
     }
     logger.debug("CFG:\n{0}".format(yaml.safe_dump(cfg)))
     try:
-        (_, tmp) = tempfile.mkstemp(suffix=".yaml")
+        (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
+        os.close(fd)
         with open(tmp, 'w') as fp:
             yaml.dump(cfg, fp)
         kcfg.load_kube_config(tmp)
@@ -1451,7 +1452,8 @@ def resAvailable(required, available):
     return True
 
 def launchFromSpec(spec, ns):
-    (_, tmp) = tempfile.mkstemp(suffix=".yaml")
+    (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
+    os.close(fd) # keep name
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
     os.system("kubectl create -f {0} -n {1}".format(tmp, ns))
@@ -1461,7 +1463,8 @@ def launchFromSpecApi(apiClient, spec, ns=None):
     specNs = copy.deepcopy(spec)
     if ns is not None:
         specNs['metadata']['namespace'] = ns
-    (_, tmp) = tempfile.mkstemp(suffix=".yaml")
+    (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
+    os.close(fd)
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
         kutils.create_from_yaml(apiClient, tmp)
