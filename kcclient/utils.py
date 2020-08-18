@@ -440,7 +440,10 @@ def getMachineInfo(defInterface=['eth0']):
     config['machine_name'] = subprocess.check_output('cat /etc/hostname', shell=True).decode('utf-8').strip()
     config['dnsname'] = config['machine_name']
     for interface in defInterface:
-        ipinfo = ' '.join(subprocess.check_output('ifconfig {0}'.format(interface), shell=True).decode('utf-8').splitlines())
+        try:
+            ipinfo = ' '.join(subprocess.check_output('ifconfig {0}'.format(interface), shell=True).decode('utf-8').splitlines())
+        except Exception:
+            continue # perhaps does not exist, skip
         m=re.match(r'.*(inet addr\s+|inet addr\s*:\s*|inet\s+|inet\s*:\s*)(.*?)\s+', ipinfo)
         if m is not None and len(m.groups())>=2:
             config['private_ip'] = m.group(2).strip()
