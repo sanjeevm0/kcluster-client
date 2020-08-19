@@ -120,6 +120,7 @@ def removeDups(old, name):
             new.append(x)
     return new
 
+ctxName = None
 def dumpKubeCreds(user, resp, id):
     cfgdir = utils.getHome()+"/.kcluster/{0}".format(id)
     print("Writing {0} to {1}".format(resp, cfgdir))
@@ -133,7 +134,10 @@ def dumpKubeCreds(user, resp, id):
         # create config file
         yaml.safe_dump(createKubeConfig(cfgdir, resp), fp)
     # also merge into kubeconfig
-    cname = getKubeServers(cfgdir)[0].split('//')[1].split('.')[0].split('-infra')[0]
+    if ctxName is None:
+        cname = getKubeServers(cfgdir)[0].split('//')[1].split('.')[0].split('-infra')[0]
+    else:
+        cname = ctxName
     uname = cname+'-'+user
     kcfg = createKubeConfig(cfgdir, resp, clustername=cname, username=uname, contextname=uname)
     basecfg = utils.getHome()+'/.kube/config'
@@ -156,6 +160,7 @@ def getServers(queryParams, server):
     utils.mkdir("{0}/.{1}/{2}".format(utils.getHome(), "kcluster", id))
     return resp, "kcluster/{0}".format(id)
 
+sslVerify = True
 def doAPIOper(servers, id, verb, noun, queryParams, data):
     home = utils.getHome()
     if servers is None:
@@ -170,24 +175,26 @@ def doAPIOper(servers, id, verb, noun, queryParams, data):
     def getWithDebug(req):
         print("REQ: {0}".format(req))
         print("QUERYPARAMS: {0}".format(queryParams))
-        resp = requests.get(req, params=queryParams)
+        resp = requests.get(req, params=queryParams, verify=sslVerify)
         print("RESP: {0}".format(resp))
         return resp
 
+    #print("Verify={0}".format(sslVerify))
+
     if verb=="get":
-        reqFn = lambda req : requests.get(req, params=queryParams)
+        reqFn = lambda req : requests.get(req, params=queryParams, verify=sslVerify)
         #reqFn=getWithDebug
     elif verb=="create":
-        reqFn = lambda req : requests.post(req, params=queryParams, json=data)
+        reqFn = lambda req : requests.post(req, params=queryParams, json=data, verify=sslVerify)
     elif verb=="delete":
-        reqFn = lambda req : requests.delete(req, params=queryParams)
+        reqFn = lambda req : requests.delete(req, params=queryParams, verify=sslVerify)
     elif verb=="put":
-        reqFn = lambda req : requests.put(req, params=queryParams, json=data)
+        reqFn = lambda req : requests.put(req, params=queryParams, json=data, verify=sslVerify)
     else:
         print("Unknown verb {0} - noun {1}".format(verb, noun))
         exit()
     #print("Verb: {0} Noun: {1} Servers: {2} QueryParams: {3} Data: {4}".format(verb, noun, servers, queryParams, data))
-    resp = webutils.tryHttpServers("{0}".format(noun), servers, reqFn, partial(getServers, queryParams))
+    resp = webutils.tryHttpServers("{0}".format(noun), servers, reqFn, partial(getServers, queryParams), verify=sslVerify)
 
     #if resp is not None:
     #    print(json.dumps(resp.json()))

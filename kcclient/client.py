@@ -206,6 +206,8 @@ if __name__ == "__main__":
     parser.add_argument("-jsvc", "--jsvc", default=None, help="ServiceName")
     parser.add_argument("-o", "--output", choices=['yaml', 'simple'], default=None)
     parser.add_argument("-ctx", "--setcontext", action='store_true')
+    parser.add_argument("--ctxname", "-ctxname", default=None, required=False, help="Context name of cluster when downloading credentials")
+    parser.add_argument("--noverify", "-noverify", action='store_true', help="Don't verify SSL connection to Rest API server, e.g. if server is using self-signed cert")
     args = parser.parse_args()
     args.noun = args.noun.lower()
     if args.noun2 is not None:
@@ -228,6 +230,9 @@ if __name__ == "__main__":
     if args.verb == 'checktoken':
         print(webutils.decodeOIDCToken("kcluster", args.user))
         exit()
+
+    kcapi.sslVerify = not args.noverify
+    kcapi.ctxName = args.ctxname
 
     if args.verb == "login":
         if args.noun == "google" or args.noun == "msft":

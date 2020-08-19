@@ -159,9 +159,9 @@ def tryServers(servers, doFn, regetFn):
             pass
     return resp
 
-def tryHttpServers(req, servers, reqFn, regetFn):
+def tryHttpServers(req, servers, reqFn, regetFn, verify=True):
     def wrapper(server):
-        url = requests.head(server) # exception thrown if not alive
+        url = requests.head(server, verify=verify) # exception thrown if not alive
         #if url.status_code != 200 and url.status_code != 302 and url.status_code != 301:
         #    regetServers = True
         #    continue
