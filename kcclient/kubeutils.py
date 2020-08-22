@@ -749,12 +749,15 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
             logger.error("_watchAndDo Encounter exception {0}".format(ex))
             pass
         if stopLoop():
+            logger.info("WatchAndDoStopLoop")
             w.stop()
             return
         done = doFn(e['type'].lower(), obj, False)
         if done:
+            logger.info("WatchAndDoStopLoopDone")
             w.stop()
             return
+    logger.info("WatchAndDoLoopExits")
     if ('timeout_seconds' not in thread.selfCtx or thread.selfCtx['timeout_seconds'] <= 0 or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
         logger.info("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
