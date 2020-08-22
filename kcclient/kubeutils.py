@@ -1461,22 +1461,20 @@ def resAvailable(required, available):
 
 def launchFromSpec(spec, ns):
     (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
-    os.close(fd) # keep name
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
     os.system("kubectl create -f {0} -n {1}".format(tmp, ns))
-    os.remove(tmp)
+    rmtmp(fd, tmp)
 
 def launchFromSpecApi(apiClient, spec, ns=None):
     specNs = copy.deepcopy(spec)
     if ns is not None:
         specNs['metadata']['namespace'] = ns
     (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
-    os.close(fd)
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
         kutils.create_from_yaml(apiClient, tmp)
-    os.remove(tmp)
+    rmtmp(fd, tmp)
 
 # Tracker tests
 # import kubeutils
