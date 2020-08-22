@@ -105,6 +105,14 @@ def _loadCfgCert(server, base, ca, cert, key):
     finally:
         os.remove(tmp)
 
+def rmtmp(fd, name):
+    try:
+        os.close(fd)
+    except Exception:
+        pass # already closed
+    if os.path.exists(name):
+        os.remove(name)
+
 def _loadCfgCert2(server, base, ca, cert, key):
     cfg = {
         "apiVersion": "v1",
@@ -141,15 +149,12 @@ def _loadCfgCert2(server, base, ca, cert, key):
     logger.debug("CFG:\n{0}".format(yaml.safe_dump(cfg)))
     try:
         (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
-        os.close(fd)
+        logger.info("Use temp file {0}".format(tmp))
         with open(tmp, 'w') as fp:
             yaml.dump(cfg, fp)
         kcfg.load_kube_config(tmp)
     finally:
-        try:
-            os.remove(tmp)
-        except Exception:
-            atexit.register(os.remove, tmp)
+        atexit.register(rmtmp, fd, tmp)
 
 # Load CFG from a Kcluster client
 def _loadCfgKclient(id, user):
