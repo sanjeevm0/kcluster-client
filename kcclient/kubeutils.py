@@ -1,6 +1,7 @@
 import os
 import sys
 from kubernetes import client as kclient, config as kcfg, watch, utils as kutils
+#import kubewatch as watch
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 import utils
@@ -698,48 +699,84 @@ def hasParent(o):
 
 def _getWatchCtx(lister, **kwargs):
     w = watch.Watch()
+    expireTime = 60 # every minute restart watch, bugs in urllib prevent broken connection from terminating watch
+    if 'resource_version' in kwargs and kwargs['resource_version'] is None:
+        kwargs.pop('resource_version') # unset it
     if 'timeout_seconds' not in kwargs:
-        watcher = w.stream(lister, timeout_seconds=0, **kwargs)
+        # return a generator which can be iterated over        
+        #watcher = w.stream(lister, timeout_seconds=0, **kwargs)
+        watcher = w.stream(lister, timeout_seconds=expireTime, **kwargs) # expire after 60 seconds and restart
     else:
-        watcher = w.stream(lister, **kwargs)
+        #watcher = w.stream(lister, **kwargs) # return a generator (not a function)
+        ts = kwargs.pop('timeout_seconds')
+        if ts==0:
+            ts = expireTime
+        watcher = w.stream(lister, timeout_seconds=min(expireTime, ts), **kwargs)
     return w, watcher
 
 def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
     #print("IN WATCH AND DO")
-    if stopLoop is None:
-        stopLoop = lambda : False
-    if stopLoop():
-        return
-    # Get initial obj list
-    try:
-        initobjs = listerFn()
-        if isinstance(initobjs, dict):
-            initobjs = utils.ToClass(initobjs, True)
-    except Exception as ex:
-        logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
-        return # don't set repeat to true, let it terminate
+    doinit = thread.selfCtx.get('doinit', True)
+    maxResVer = thread.selfCtx.get('resource_version', None)
     init = {}
-    for obj in initobjs.items:
-        init[obj.metadata.uid] = obj
+    if doinit:
+        if stopLoop is None:
+            stopLoop = lambda : False
         if stopLoop():
             return
-        done = doFn('added', obj, True)
+        # Get initial obj list
+        doFn('init', None, True) # every start calls this
+        try:
+            initobjs = listerFn() # keep resource_version unset so that it starts from scratch
+            maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
+            if isinstance(initobjs, dict):
+                initobjs = utils.ToClass(initobjs, True)
+        except Exception as ex:
+            logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
+            return # don't set repeat to true, let it terminate
+        for obj in initobjs.items:
+            init[obj.metadata.uid] = obj
+            if stopLoop():
+                return
+            done = doFn('added', obj, True)
+            if done:
+                return
+
+        done = doFn("none", None, False) # once after initialization done
         if done:
             return
 
-    done = doFn("none", None, False) # once after initialization done
-    if done:
-        return
-
-    w, watcher = watcherFn()
+    w, watcher = watcherFn(maxResVer) # watcher is a generator
     thread.selfCtx['state'] = {'watcher': w}
-    for e in watcher:
+    thread.selfCtx['doinit'] = True # do init again unless normal termination
+    thread.selfCtx['resource_version'] = None # no resource version
+    while True:
+        try:
+            e = next(watcher)
+        except StopIteration:
+            # normal termination
+            logger.info("Normal termination")
+            if maxResVer is not None:
+                logger.info("Next watch starts at {0}".format(maxResVer))
+                thread.selfCtx['doinit'] = False
+                thread.selfCtx['resource_version'] = maxResVer
+            else:
+                logger.info("Next watch starts from scratch")
+            break
+        except Exception as e:
+            logger.info("Generator encounters exception {0}".format(e))
+            break # also break
+
+        if e['type'] not in ["ADDED", "DELETED", "MODIFIED"]:
+            logger.info("Unknown type {0} encountered -- stop loop".format(e['type'])) # e.g. "ERROR"
+            break
         #print(e)
         #raw = e['raw_object'] # accessible as map
         if isinstance(e['object'], dict):
             obj = utils.ToClass(e['object'], True)
         else:
             obj = e['object']
+        maxResVer = obj.metadata.resource_version
         try:
             if e['type'].lower()=="added" and obj.metadata.uid in init and init[obj.metadata.uid].metadata.resource_version==obj.metadata.resource_version:
                 logger.debug("Already processed: {0}".format(obj.metadata.uid))
@@ -762,15 +799,17 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
             logger.info("WatchAndDoStopLoopDone")
             w.stop()
             return
+        #print("Start next watch")
     logger.info("WatchAndDoLoopExits")
     if ('timeout_seconds' not in thread.selfCtx or thread.selfCtx['timeout_seconds'] <= 0 or
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
         logger.info("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
         thread.selfCtx['repeat'] = True
+    #time.sleep(20) # sleep only for testing if trackObj correctly handles objects deleted during thread restarts
 
 def _getListerAndWatcher(fn, **kwargs):
     listerFn = lambda : fn(**kwargs)
-    watcherFn = lambda : _getWatchCtx(fn, **kwargs)
+    watcherFn = lambda rv : _getWatchCtx(fn, resource_version=rv, **kwargs)
     return listerFn, watcherFn
 
 def _getListerAndWatcherFromClient(lister, **kwargs):
@@ -1046,17 +1085,34 @@ class ObjTracker:
         self.init = False
         self.lock = threading.RLock()
 
+    # init=True implies performing init
     def trackObj(self, event, obj, init):
         with self.lock:
-            self.connected = True # any notification means we are connected
+            if event == 'init':
+                logger.info("Reinit trackObj")
+                self.init = False # go back to uninit state
+                self.seenInInit = {}
+                return
+            self.connected = True # any notification with message means we are connected
             # exit for duplicate add (e.g. watcher thread restarts) - no callback needed
+            if event == 'added' and init:
+                self.seenInInit[obj.metadata.uid] = True
             if event == 'added' and obj is not None and obj.metadata.uid in self.objs:
                 if obj.metadata.resource_version==self.objs[obj.metadata.uid].metadata.resource_version:
-                    return
+                    return # no callback, already processed
             if event == 'none':
+                assert(not init)
+                # check seenInInit -> in case anything deleted in between thread restarts
+                toPop = []
+                #print(self.seenInInit)
+                for objId, cachedObj in self.objs.items():
+                    if objId not in self.seenInInit:
+                        logger.info("Object deleted in between thread restarts {0} {1}".format(objId, cachedObj.metadata.name))
+                        toPop.append(objId)
+                for objId in toPop:
+                    delObj = self.objs.pop(objId)
+                    self.callback('deleted', delObj, True, None)
                 self.init = True
-            elif init:
-                self.init = False # go back to uninit state
             objPrev = None
             if obj is not None:
                 objId = obj.metadata.uid
@@ -1080,6 +1136,7 @@ class ObjTracker:
 
     def gc(self, _):
         while True:
+            #print("GC Start")
             with self.lock:
                 if self.stop:
                     return
@@ -1088,6 +1145,7 @@ class ObjTracker:
                     (_, idToDel) = self.deletedObjQ.popleft()
                     delObj = self.deletedObjs.pop(idToDel, None)
                     logger.info("GarbageCollect:{0}:{1}".format(idToDel, delObj.metadata.name))
+            #print("GC End")
             time.sleep(self.gcFreq)
 
     def snapshot(self):
@@ -1375,29 +1433,29 @@ def WatchNodesThreadClient(id, name, sharedCtx, clientFn, doFn, stopLoop=None):
 # k = kubeutils.createClient('/home/core/deploy')
 # ctx = {'reqs' : {}}
 # kubeutils.watchNsPodsAndDo(k, 'sanjeevm0-hotmail-com', lambda type, pod, init : kubeutils.trackReqs(ctx, type, pod, init))
-def watchNsPodsAndDo(client, ns, doFn, stopLoop=None):
-    listerFn = lambda : client.list_namespaced_pod(namespace=ns)
-    watcherFn = lambda : _getWatchCtx(client.list_namespaced_pod, namespace=ns)
-    _watchAndDo({}, listerFn, watcherFn, doFn, stopLoop)
+# def watchNsPodsAndDo(client, ns, doFn, stopLoop=None):
+#     listerFn = lambda : client.list_namespaced_pod(namespace=ns)
+#     watcherFn = lambda : _getWatchCtx(client.list_namespaced_pod, namespace=ns)
+#     _watchAndDo({}, listerFn, watcherFn, doFn, stopLoop)
 
 def WatchNsPodsThread(id, name, sharedCtx, deploydir, ns, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)
     listerFn = lambda : client.list_namespaced_pod(namespace=ns)
-    watcherFn = lambda : _getWatchCtx(client.list_namespaced_pod, namespace=ns)
+    watcherFn = lambda rv : _getWatchCtx(client.list_namespaced_pod, namespace=ns, resource_version=rv)
     t = ThreadFnR(id, name, sharedCtx, _watchAndDo, listerFn, watcherFn, doFn, stopLoop)
     t.daemon = True # the stop mechanism does not work
     t.start()
     return t
 
-def watchAllPodsAndDo(client, doFn, stopLoop=None):
-    listerFn = lambda : client.list_pod_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(client.list_pod_for_all_namespaces)
-    _watchAndDo({}, listerFn, watcherFn, doFn, stopLoop)
+# def watchAllPodsAndDo(client, doFn, stopLoop=None):
+#     listerFn = lambda : client.list_pod_for_all_namespaces()
+#     watcherFn = lambda : _getWatchCtx(client.list_pod_for_all_namespaces)
+#     _watchAndDo({}, listerFn, watcherFn, doFn, stopLoop)
 
 def WatchAllPodsThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     client = waitForKube(deploydir, True)
     listerFn = lambda : client.list_pod_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(client.list_pod_for_all_namespaces)
+    watcherFn = lambda rv : _getWatchCtx(client.list_pod_for_all_namespaces, resource_version=rv)
     t = ThreadFnR(id, name, sharedCtx, _watchAndDo, listerFn, watcherFn, doFn, stopLoop)
     t.daemon = True
     t.start()
@@ -1411,15 +1469,15 @@ def WatchAllPodsThreadClient(id, name, sharedCtx, clientFn, doFn, stopLoop=None)
     t.start()
     return t
 
-def watchAllDeploymentsAndDo(appClient, doFn, stopLoop=None):
-    listerFn = lambda : appClient.list_deployment_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(appClient.list_deployment_for_all_namespaces)
-    _watchAndDo(listerFn, watcherFn, doFn, stopLoop)
+# def watchAllDeploymentsAndDo(appClient, doFn, stopLoop=None):
+#     listerFn = lambda : appClient.list_deployment_for_all_namespaces()
+#     watcherFn = lambda : _getWatchCtx(appClient.list_deployment_for_all_namespaces)
+#     _watchAndDo(listerFn, watcherFn, doFn, stopLoop)
 
 def WatchAllDeploymentsThread(id, name, sharedCtx, deploydir, doFn, stopLoop=None):
     appClient = createAppClient(deploydir, True)
     listerFn = lambda : appClient.list_deployment_for_all_namespaces()
-    watcherFn = lambda : _getWatchCtx(appClient.list_deployment_for_all_namespaces)
+    watcherFn = lambda rv : _getWatchCtx(appClient.list_deployment_for_all_namespaces, resource_version=rv)
     t = ThreadFnR(id, name, sharedCtx, _watchAndDo, listerFn, watcherFn, doFn, stopLoop)
     t.daemon = True
     t.start()
