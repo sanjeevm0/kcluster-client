@@ -728,9 +728,9 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         doFn('init', None, True) # every start calls this
         try:
             initobjs = listerFn() # keep resource_version unset so that it starts from scratch
-            maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
             if isinstance(initobjs, dict):
                 initobjs = utils.ToClass(initobjs, True)
+            maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
         except Exception as ex:
             logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
             return # don't set repeat to true, let it terminate
