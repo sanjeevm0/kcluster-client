@@ -1216,7 +1216,7 @@ class ObjTracker:
 # Supports token (e.g. service token, and TLS certs for auth)
 class Cluster:
     def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None,
-        kubeconfig=None, kubeconfigYaml=None, kubeconfiguser=None, forceOverwrite=False, inPodCluster=False):
+        kubeconfig=None, kubeconfigYaml=None, kubeconfiguser=None, forceOverwrite=True, inPodCluster=False):
         self.name = name
         self.api_key = api_key
         self.inPodCluster = inPodCluster
@@ -1597,7 +1597,7 @@ class NodeTracker():
             return
         if eventType=="deleted":
             self.nodes.pop(obj.metadata.name, None)
-        else:
+        elif obj is not None:
             self.nodes[obj.metadata.name] = obj
 
     def getAvail(self, nodename):
@@ -1717,7 +1717,7 @@ class PodTracker():
         self.callback()
 
     def trackPods(self, eventType, obj, init):
-        if eventType=="none":
+        if eventType=="none" or obj is None:
             return
         podname = obj.metadata.namespace + "/" + obj.metadata.name
         if podname in self.nodeForPod:

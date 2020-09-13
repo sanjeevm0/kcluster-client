@@ -147,7 +147,7 @@ def copyFile2(src, dstArg, homedir, numTry=10, pwd=None, id=None):
         print(cmd)
         for i in range(numTry):
             done = getoutput(cmd)
-            print(done)
+            #print(done)
             if done=="DONE":
                 break
             else:
