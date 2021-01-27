@@ -1209,9 +1209,11 @@ class ObjTracker:
                 t = ThreadFn(getThreadId(), "ObjTracker-GarbageCollect-{0}-{1}".format(self.clusterName, self.lister), {}, self.gc)
                 t.daemon = True
                 t.start()
-                WatchObjClusterThread("ObjTracker-{0}-{1}".format(self.clusterName, self.lister), self.sharedCtx, self.trackObj, *self.args, 
+                wt = WatchObjClusterThread("ObjTracker-{0}-{1}".format(self.clusterName, self.lister), self.sharedCtx, self.trackObj, *self.args, 
                     finisher=self.finished, disconnect=self.disconnect, **self.kwargs)
                 self.started = True
+                return wt
+        return None
 
 # Supports token (e.g. service token, and TLS certs for auth)
 class Cluster:
