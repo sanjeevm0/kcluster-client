@@ -1283,7 +1283,7 @@ class Cluster:
             self.base, _ = os.path.split(self.kubeconfig)
         else:
             self.base = tempfile.gettempdir()
-        if self.base="":
+        if self.base=="":
             self.base = "." # otherwise loadCfgCert2 will try to load as "/file"
         self.ca = "{0}-ca.pem".format(self.name)
         self.cert = "{0}-cert.pem".format(self.name)
