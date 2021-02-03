@@ -1285,9 +1285,9 @@ class Cluster:
             self.base = tempfile.gettempdir()
         if self.base=="":
             self.base = "." # otherwise loadCfgCert2 will try to load as "/file"
-        self.ca = "{0}-ca.pem".format(self.name)
-        self.cert = "{0}-cert.pem".format(self.name)
-        self.key = "{0}-key.pem".format(self.name)
+        self.ca = "{0}-5f4rvds1d3sa12-ca.pem".format(self.name)
+        self.cert = "{0}-5f4rvds1d3sa12-cert.pem".format(self.name)
+        self.key = "{0}-5f4rvds1d3sa12-key.pem".format(self.name)
         self.serverFileFixed = None
         caName = os.path.join(self.base, self.ca)
         certName = os.path.join(self.base, self.cert)
