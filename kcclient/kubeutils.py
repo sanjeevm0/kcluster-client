@@ -1283,6 +1283,8 @@ class Cluster:
             self.base, _ = os.path.split(self.kubeconfig)
         else:
             self.base = tempfile.gettempdir()
+        if self.base="":
+            self.base = "." # otherwise loadCfgCert2 will try to load as "/file"
         self.ca = "{0}-ca.pem".format(self.name)
         self.cert = "{0}-cert.pem".format(self.name)
         self.key = "{0}-key.pem".format(self.name)
@@ -1295,10 +1297,10 @@ class Cluster:
         else:
             kconfig = self.kubeconfigYaml
             self.forceOverwrite = True
-            # try best to remove these at exit
-            atexit.register(os.remove, caName)
-            atexit.register(os.remove, certName)
-            atexit.register(os.remove, keyName)
+        # try best to remove these at exit
+        atexit.register(os.remove, caName)
+        atexit.register(os.remove, certName)
+        atexit.register(os.remove, keyName)
         for c in kconfig['clusters']:
             if c['name'] == self.name:
                 if not os.path.exists(caName) or self.forceOverwrite:
