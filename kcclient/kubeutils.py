@@ -114,6 +114,10 @@ def rmtmp(fd, name):
     if os.path.exists(name):
         os.remove(name)
 
+def rmtmp2(name):
+    if os.path.exists(name):
+        os.remove(name)
+
 def _loadCfgCert2(server, base, ca, cert, key):
     cfg = {
         "apiVersion": "v1",
@@ -1250,6 +1254,7 @@ class Cluster:
         parser.add_argument('--aksname', '-aksname', nargs='+', default=None, required=False, help="AKS cluster of form: <resourceGroup> <clusterName>")
         parser.add_argument('--kcfg', '-kcfg', nargs='+', default=None, required=False, help="Kube config cluster of form: <kubeConfigFile> <clusterName> <clusterUser>")
         parser.add_argument('--kcert', '-kcert', nargs='+', default=None, required=False, help="Kube certs of form: <Server> <Base> <CA> <Cert> <Key>")
+        parser.add_argument('--kdef', '-kdef', action='store_true', help="Use default Kubeconfig file and current context")
 
     @staticmethod
     def fromCmdArgs(args):
@@ -1259,6 +1264,11 @@ class Cluster:
             return Cluster(kubeconfig=args.kcfg[0], name=args.kcfg[1], kubeconfiguser=args.kcfg[2])
         elif args.kcert is not None:
             return Cluster(servers=[args.kcert[0]], base=args.kcert[1], ca=args.kcert[2], cert=args.kcert[3], key=args.kcert[4])
+        elif args.kdef:
+            kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
+            config = utils.loadYaml(kubeconfig)
+            defConfig = [v for v in config['contexts'] if v['name']==config['current-context']][0]
+            return Cluster(kubeconfig=kubeconfig, name=defConfig['context']['cluster'], kubeconfiguser=defConfig['context']['user'])
         else:
             return Cluster(inPodCluster=True) # run from within a pod
 
@@ -1298,9 +1308,9 @@ class Cluster:
             kconfig = self.kubeconfigYaml
             self.forceOverwrite = True
         # try best to remove these at exit
-        atexit.register(os.remove, caName)
-        atexit.register(os.remove, certName)
-        atexit.register(os.remove, keyName)
+        atexit.register(rmtmp2, caName)
+        atexit.register(rmtmp2, certName)
+        atexit.register(rmtmp2, keyName)
         for c in kconfig['clusters']:
             if c['name'] == self.name:
                 if not os.path.exists(caName) or self.forceOverwrite:
