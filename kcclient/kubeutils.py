@@ -1294,6 +1294,13 @@ class Cluster:
         parser.add_argument('--kdef', '-kdef', action='store_true', help="Use default Kubeconfig file and current context")
 
     @staticmethod
+    def defCluster():
+        kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
+        config = utils.loadYaml(kubeconfig)
+        defConfig = [v for v in config['contexts'] if v['name']==config['current-context']][0]
+        return Cluster(kubeconfig=kubeconfig, name=defConfig['context']['cluster'], kubeconfiguser=defConfig['context']['user'])
+
+    @staticmethod
     def fromCmdArgs(args):
         if args.aksname is not None:
             return Cluster.aksname(args.aksname[0], args.aksname[1])
@@ -1302,10 +1309,7 @@ class Cluster:
         elif args.kcert is not None:
             return Cluster(servers=[args.kcert[0]], base=args.kcert[1], ca=args.kcert[2], cert=args.kcert[3], key=args.kcert[4])
         elif args.kdef:
-            kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
-            config = utils.loadYaml(kubeconfig)
-            defConfig = [v for v in config['contexts'] if v['name']==config['current-context']][0]
-            return Cluster(kubeconfig=kubeconfig, name=defConfig['context']['cluster'], kubeconfiguser=defConfig['context']['user'])
+            return Cluster.defCluster()
         else:
             return Cluster(inPodCluster=True) # run from within a pod
 
