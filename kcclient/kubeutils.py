@@ -1106,25 +1106,25 @@ class ObjTracker:
     # A standard callback which keeps objects in "objs" by key (using toKey)
     # returns (processed, deleted) tuple
     @staticmethod
-    def ProcessObj(predicate, evType, obj, objs):
+    def ProcessObj(predicate, evType, obj, objs, replacements={}):
         if obj is None:
-            return False, False
+            return False, False, None
 
-        obj = ToYaml(obj)
-        if not predicate(obj):
-            return False, False
-
+        obj = ToYaml(obj, replacements) # replace _ip_ with _IP_ (e.g. for IP addresses)
         key = ToKey(obj)
         if 'key' in obj:
             raise Exception("Already has a field called key")
         obj['key'] = key
 
+        if not predicate(obj):
+            return False, False, obj
+
         if obj.metadata.deletion_timestamp is not None or evType=="deleted":
             objs.pop(key, None)
-            return True, True
+            return True, True, obj
 
         objs[key] = copy.deepcopy(obj)
-        return True, False
+        return True, False, obj
 
     # init=True implies performing init
     def trackObj(self, event, obj, init):
@@ -2079,13 +2079,13 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
-def ToYaml(obj):
+def ToYaml(obj, replacements={}):
     if isinstance(obj, dict):
-        return utils.camelizeKeys(obj)
+        return utils.camelizeKeys(obj, False, replacements)
     elif type(obj)==utils.ToClass:
         return obj.to_dict(True)
     else:
-        return utils.camelizeKeys(getSpecFromObj(obj))
+        return utils.camelizeKeys(getSpecFromObj(obj), False, replacements)
 
 def ToKey(o):
     if type(o)==dict:

@@ -1,3 +1,4 @@
+import enum
 import time
 import random
 import string
@@ -914,9 +915,18 @@ def pythonizeKeys(d):
         dNew[newKey] = _unwrap(val, pythonizeKeys)
     return dNew
 
-def camelizeKeys(d, upperCaseFirst=False):
+def camelizeKeys(d, upperCaseFirst=False, replacements={}):
     dNew = {}
     for key, val in d.items():
+        if replacements is not None and len(replacements) > 0:
+            parts = key.split('_')
+            #print(parts)
+            for i, p in enumerate(parts):
+                if p in replacements:
+                    parts[i] = replacements[p]
+            #print(parts)
+            key = '_'.join(parts)
+            #print(key)
         newKey = inflection.camelize(key, upperCaseFirst)
         dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
     return dNew
