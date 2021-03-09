@@ -19,6 +19,7 @@ import threading
 import urllib3
 import atexit
 import inflection
+import traceback
 from collections import deque
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -686,10 +687,16 @@ def getReqs(spec):
         return getPodReqs(spec)
     return True, None
 
+specTypeCompile = re.compile(r'.*\.(v.*?)_(.*?)\.')
 def getSpecFromObj(o):
     d = o.to_dict()
-    if d['kind'] is None:
-        d['kind'] = re.match(r'.*\.V.(.*)\'\>', str(type(o))).group(1)
+    if d['kind'] is None or d['api_version'] is None:
+        m = specTypeCompile.match(str(type(o)))
+        if m is not None:
+            if d['api_version'] is None:
+                d['api_version'] = m.group(1)
+            if d['kind'] is None:
+                d['kind'] = inflection.camelize(m.group(2), True)
     return d
 
 def getReqsFromObj(o):
@@ -1060,7 +1067,7 @@ def getKind(o):
             return o.kind
         return re.match(r'.*\.V.(.*)\'\>', str(type(o))).group(1)
     except Exception:
-        return str(type(o))
+        return str(type(o))     
 
 # Object tracker
 class ObjTracker:
@@ -1088,6 +1095,36 @@ class ObjTracker:
         self.connected = True # connected unless told otherwise
         self.init = False
         self.lock = threading.RLock()
+
+    @staticmethod
+    def TryCb(cb, evType, obj, init, objPrev):
+        try:
+            cb(evType, obj, init, objPrev)
+        except Exception as ex:
+            logger.error("ERROR: {0} {1}".format(ex, traceback.format_exc()))
+
+    # A standard callback which keeps objects in "objs" by key (using toKey)
+    # returns (processed, deleted) tuple
+    @staticmethod
+    def ProcessObj(predicate, evType, obj, objs):
+        if obj is None:
+            return False, False
+
+        obj = ToYaml(obj)
+        if not predicate(obj):
+            return False, False
+
+        key = ToKey(obj)
+        if 'key' in obj:
+            raise Exception("Already has a field called key")
+        obj['key'] = key
+
+        if obj.metadata.deletion_timestamp is not None or evType=="deleted":
+            objs.pop(key, None)
+            return True, True
+
+        objs[key] = copy.deepcopy(obj)
+        return True, False
 
     # init=True implies performing init
     def trackObj(self, event, obj, init):
@@ -2044,7 +2081,49 @@ def ToYaml(obj):
     elif type(obj)==utils.ToClass:
         return obj.to_dict(True)
     else:
-        return utils.camelizeKeys(obj.to_dict())
+        return utils.camelizeKeys(getSpecFromObj(obj))
+
+def ToKey(o):
+    if type(o)==dict:
+        return o['metadata']['namespace'] + "/" + o['metadata']['name']
+    else:
+        return o.metadata.namespace + "/" + o.metadata.name   
+
+def findDeploymentForPod(pod, deployments):
+    # In, NotIn, Exists, and DoesNotExist. The values set must be non-empty in the case of In and NotIn. 
+    # All of the requirements, from both matchLabels and matchExpressions are ANDed together -- 
+    # they must all be satisfied in order to match - any violation returns in not matching
+    podLabels = utils.getValDef(pod, ['metadata', 'labels'], {}, None)
+    for deplKey, depl in deployments.items():
+        if pod['metadata']['namespace'] != depl['metadata']['namespace']:
+            continue
+        match = True
+        for k, v in utils.getValDef(depl, ['spec', 'selector', 'matchLabels'], {}, None).items():
+            if k not in podLabels or podLabels[k] != v:
+                match = False
+                break
+        if not match:
+            continue
+        for expr in utils.getValDef(depl, ['spec', 'selector', 'matchExpressions'], [], None):
+            if expr['operator']=='In':
+                if expr['key'] not in podLabels or podLabels[expr['key']] not in expr['values']:
+                    match = False
+                    break
+            elif expr['operator']=='NotIn':
+                if expr['key'] in podLabels and podLabels[expr['key']] in expr['values']:
+                    match = False
+                    break
+            elif expr['operator']=='Exists':
+                if expr['key'] not in podLabels:
+                    match = False
+                    break
+            elif expr['operator']=='DoesNotExist':
+                if expr['key'] in podLabels:
+                    match = False
+                    break
+        if match:
+            return deplKey, depl
+    return None, None
 
 # def getPodName(client):
 #     ns = getPodNs()
