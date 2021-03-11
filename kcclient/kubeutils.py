@@ -1118,7 +1118,7 @@ class ObjTracker:
         objO = copy.deepcopy(obj)
         obj = ToYaml(obj, replacements) # replace _ip_ with _IP_ (e.g. for IP addresses)
         if obj['kind']=="Pod":
-            obj['running'] = podRunning(obj)
+            obj['running'] = podRunning(objO)
         key = ToKey(obj)
         if 'key' in obj:
             raise Exception("Already has a field called key")
