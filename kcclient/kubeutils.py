@@ -1096,10 +1096,15 @@ class ObjTracker:
         self.init = False
         self.lock = threading.RLock()
 
+    # try-catch callback with optional lock
     @staticmethod
-    def TryCb(cb, evType, obj, init, objPrev):
+    def TryCb(cb, lock, evType, obj, init, objPrev):
         try:
-            cb(evType, obj, init, objPrev)
+            if lock is None:
+                cb(evType, obj, init, objPrev)
+            else:
+                with lock:
+                    cb(evType, obj, init, objPrev)
         except Exception as ex:
             logger.error("ERROR: {0} {1}".format(ex, traceback.format_exc()))
 
