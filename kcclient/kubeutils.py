@@ -1115,7 +1115,10 @@ class ObjTracker:
         if obj is None:
             return False, False, None
 
+        objO = copy.deepcopy(obj)
         obj = ToYaml(obj, replacements) # replace _ip_ with _IP_ (e.g. for IP addresses)
+        if obj['kind']=="Pod":
+            obj['running'] = podRunning(obj)
         key = ToKey(obj)
         if 'key' in obj:
             raise Exception("Already has a field called key")
