@@ -928,7 +928,7 @@ def camelizeKeys(d, upperCaseFirst=False, replacements={}):
             key = '_'.join(parts)
             #print(key)
         newKey = inflection.camelize(key, upperCaseFirst)
-        dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst)
+        dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst, replacements)
     return dNew
 
 # Text Type:	str
