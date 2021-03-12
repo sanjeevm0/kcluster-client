@@ -1127,7 +1127,7 @@ class ObjTracker:
         if not predicate(obj):
             return False, False, obj
 
-        if utils.getValDef(obj, ['metadata', 'deletion_timestamp'], None, None) is not None or evType=="deleted":
+        if utils.getValDef(obj, ['metadata', 'deletionTimestamp'], None, None) is not None or evType=="deleted":
             objs.pop(key, None)
             return True, True, obj
 
