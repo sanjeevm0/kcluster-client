@@ -2234,7 +2234,7 @@ def mergeInto(existFile, *args, failOnExist=True, newUser=None, newCluster=None,
         if not success:
             raise Exception("Not successful in merging, perphaps already exists")
     #print(exist)
+    (fd, tmp) = tempfile.mkstemp()
+    utils.dumpYaml(exist, tmp)
+    utils.replaceSave(existFile, tmp)
     return exist
-    #(fd, tmp) = tempfile.mkstemp()
-    #utils.dumpYaml(exist, tmp)
-    #utils.replaceSave(existFile, tmp)
