@@ -2200,7 +2200,6 @@ def mergeField(exist, new, failOnExist=False):
         found = False
         for i, e in enumerate(exist):
             if e['name'] == n['name']:
-                print("F match {0}".format(failOnExist))
                 if failOnExist and (e != n):
                     return False, copy.deepcopy(exist)
                 updated[i] = n
@@ -2230,6 +2229,12 @@ def mergeInto(existFile, *args, failOnExist=True, newUser=None, newCluster=None,
             new['users'][0]['name'] = newUser
         if newContext is not None:
             new['contexts'][0]['name'] = newContext
+        new['contexts'][0]['context'].update({
+            'cluster': new['clusters'][0]['name'],
+            'user': new['users'][0]['name']
+        })
+        print("Merge {0} into kubeconfig {1} {2} {3}".format(
+            a, new['clusters'][0]['name'], new['users'][0]['name'], new['contexts'][0]['name']))
         success, exist = mergeConfig(exist, new, failOnExist=failOnExist)
         if not success:
             raise Exception("Not successful in merging, perphaps already exists")
