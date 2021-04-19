@@ -559,13 +559,13 @@ def nodeIsMaster(node):
                     return True
     return False
 
-def getMasterNodes(client):
+def getinfraNodes(client):
     nodes = getNodes(client)
-    masterNodes = []
+    infraNodes = []
     for node in nodes:
         if nodeIsMaster(node):
-            masterNodes.append(node)
-    return masterNodes
+            infraNodes.append(node)
+    return infraNodes
 
 def getNodeAvail(node, skipCordon=True):
     node = nodeToDict(node)
@@ -1720,7 +1720,7 @@ class NodeTracker():
         avails.pop(nodeToRemove, None) # remove specified nodename
         return addVals(list(avails.values()))
 
-    def masterNode(self, nodename):
+    def infraNode(self, nodename):
         if nodename not in self.nodes:
             return False
         return nodeIsMaster(self.nodes[nodename])
@@ -2187,3 +2187,46 @@ def kubeLoadTLS(tlscm=[], cluster=None, ns=None):
         except Exception:
             print("Unable to load {0}".format(cmn))
     return certs
+
+# returns whether merge took place or not & updated value, merge is atomic
+def mergeField(exist, new, failOnExist=False):
+    if exist is not None:
+        updated = copy.deepcopy(exist)
+    else:
+        updated = []
+    if new is None:
+        return True, updated
+    for n in new:
+        found = False
+        for i, e in enumerate(exist):
+            if e['name'] == n['name']:
+                if failOnExist and (e != n):
+                    return False, copy.deepcopy(exist)
+                updated[i] = n
+                found = True
+                break
+        if not found:
+            updated.append(n)
+    return True, updated
+
+def mergeConfig(exist, new, failOnExist=False):
+    updated = copy.deepcopy(exist)
+    success1, updated['users'] = mergeField(exist.get('users', None), new.get('users', None))
+    success2, updated['clusters'] = mergeField(exist.get('clusters', None), new.get('clusters', None))
+    success3, updated['contexts'] = mergeField(exist.get('contexts', None), new.get('contexts', None))
+    if success1 and success2 and success3:
+        return True, updated
+    else:
+        return False, copy.deepcopy(exist)
+
+def mergeInto(existFile, *args):
+    exist = utils.loadYaml(existFile)
+    for a in args:
+        new = utils.loadYaml(a)
+        success, exist = mergeConfig(exist, new, failOnExist=True)
+        if not success:
+            raise Exception("Not successful in merging")
+    print(exist)
+    #(fd, tmp) = tempfile.mkstemp()
+    #utils.dumpYaml(exist, tmp)
+    #utils.replaceSave(existFile, tmp)

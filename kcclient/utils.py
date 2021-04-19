@@ -14,6 +14,7 @@ from jinja2 import Environment, FileSystemLoader, Template
 import base64
 import hashlib
 import sys
+from datetime import datetime
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 
@@ -1150,6 +1151,31 @@ def _smartLoad(xKey, x, keyUnmapper, valUnmapper, seenVals, toDict):
 
 def smartLoad(x, toDict=False):
     return _smartLoad(None, x, lambda key : key, lambda key, val : val, {}, toDict)
+
+def replaceSave(old, new):
+    dateStr = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
+    a, b = os.path.splitext(old)
+    dst = '{0}.{1}{2}'.format(a, dateStr, b)
+    #print("DST: {0}".format(dst))
+    if os.path.exists(dst):
+        raise Exception("{0} already exists".format(dst))
+    shutil.move(old, dst)
+    shutil.copy(new, old)
+
+def nrun(cmd):
+    print(cmd)
+    os.system(cmd)
+
+def runScriptRemote(script, user, machine, sshid=None, exe='bash'):
+    name = random_string_l(32)
+    if sshid is not None:
+        id = "-i {0}".format(sshid)
+    else:
+        id = ""
+    loc = "{0}@{1}".format(user, machine)
+    nrun("scp {0} {1} {2}:/home/{3}/{4}".format(id, script, loc, user, name))
+    nrun("ssh {0} {1} {2} /home/{3}/{4}".format(id, loc, exe, user, name))
+    nrun("ssh {0} {1} rm /home/{2}/{3}".format(id, loc, user, name))
 
 # YAML Validation
 class Yaml:
