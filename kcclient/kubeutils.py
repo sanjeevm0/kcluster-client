@@ -2200,6 +2200,7 @@ def mergeField(exist, new, failOnExist=False):
         found = False
         for i, e in enumerate(exist):
             if e['name'] == n['name']:
+                print("F match {0}".format(failOnExist))
                 if failOnExist and (e != n):
                     return False, copy.deepcopy(exist)
                 updated[i] = n
@@ -2211,22 +2212,29 @@ def mergeField(exist, new, failOnExist=False):
 
 def mergeConfig(exist, new, failOnExist=False):
     updated = copy.deepcopy(exist)
-    success1, updated['users'] = mergeField(exist.get('users', None), new.get('users', None))
-    success2, updated['clusters'] = mergeField(exist.get('clusters', None), new.get('clusters', None))
-    success3, updated['contexts'] = mergeField(exist.get('contexts', None), new.get('contexts', None))
+    success1, updated['users'] = mergeField(exist.get('users', None), new.get('users', None), failOnExist)
+    success2, updated['clusters'] = mergeField(exist.get('clusters', None), new.get('clusters', None), failOnExist)
+    success3, updated['contexts'] = mergeField(exist.get('contexts', None), new.get('contexts', None), failOnExist)
     if success1 and success2 and success3:
         return True, updated
     else:
         return False, copy.deepcopy(exist)
 
-def mergeInto(existFile, *args, failOnExist=True):
+def mergeInto(existFile, *args, failOnExist=True, newUser=None, newCluster=None, newContext=None):
     exist = utils.loadYaml(existFile)
     for a in args:
         new = utils.loadYaml(a)
+        if newCluster is not None:
+            new['clusters'][0]['name'] = newCluster
+        if newUser is not None:
+            new['users'][0]['name'] = newUser
+        if newContext is not None:
+            new['contexts'][0]['name'] = newContext
         success, exist = mergeConfig(exist, new, failOnExist=failOnExist)
         if not success:
-            raise Exception("Not successful in merging")
+            raise Exception("Not successful in merging, perphaps already exists")
     #print(exist)
-    (fd, tmp) = tempfile.mkstemp()
-    utils.dumpYaml(exist, tmp)
-    utils.replaceSave(existFile, tmp)
+    return exist
+    #(fd, tmp) = tempfile.mkstemp()
+    #utils.dumpYaml(exist, tmp)
+    #utils.replaceSave(existFile, tmp)
