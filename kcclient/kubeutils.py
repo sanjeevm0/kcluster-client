@@ -2219,14 +2219,14 @@ def mergeConfig(exist, new, failOnExist=False):
     else:
         return False, copy.deepcopy(exist)
 
-def mergeInto(existFile, *args):
+def mergeInto(existFile, *args, failOnExist=True):
     exist = utils.loadYaml(existFile)
     for a in args:
         new = utils.loadYaml(a)
-        success, exist = mergeConfig(exist, new, failOnExist=True)
+        success, exist = mergeConfig(exist, new, failOnExist=failOnExist)
         if not success:
             raise Exception("Not successful in merging")
-    print(exist)
-    #(fd, tmp) = tempfile.mkstemp()
-    #utils.dumpYaml(exist, tmp)
-    #utils.replaceSave(existFile, tmp)
+    #print(exist)
+    (fd, tmp) = tempfile.mkstemp()
+    utils.dumpYaml(exist, tmp)
+    utils.replaceSave(existFile, tmp)
