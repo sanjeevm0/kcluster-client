@@ -690,6 +690,10 @@ def getReqs(spec):
 specTypeCompile = re.compile(r'.*\.(v.*?)_(.*?)\.')
 def getSpecFromObj(o):
     d = o.to_dict()
+    if 'kind' not in d:
+        d['kind'] = None
+    if 'api_version' not in d:
+        d['api_version'] = None
     if d['kind'] is None or d['api_version'] is None:
         m = specTypeCompile.match(str(type(o)))
         if m is not None:
@@ -2087,10 +2091,12 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
+from utils import ToClass as utilsToClass
+
 def ToYaml(obj, replacements={}):
     if isinstance(obj, dict):
         return utils.camelizeKeys(obj, False, replacements)
-    elif type(obj)==utils.ToClass:
+    elif type(obj)==utilsToClass:
         return obj.to_dict(True)
     else:
         return utils.camelizeKeys(getSpecFromObj(obj), False, replacements)
