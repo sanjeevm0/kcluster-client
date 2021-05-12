@@ -2091,12 +2091,10 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
-from utils import ToClass as utilsToClass
-
 def ToYaml(obj, replacements={}):
     if isinstance(obj, dict):
         return utils.camelizeKeys(obj, False, replacements)
-    elif type(obj)==utilsToClass:
+    elif type(obj)==utils.ToClass or str(type(obj))=="<class 'kcclient.utils.ToClass'>":
         return obj.to_dict(True)
     else:
         return utils.camelizeKeys(getSpecFromObj(obj), False, replacements)
