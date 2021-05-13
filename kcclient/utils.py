@@ -882,22 +882,23 @@ class ToClass(object):
     def toDictString(self):
         return '{%s}' % str(', '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.items()))
 
-    def _unwrap(self, value, convtToCamelCase):
+    def _unwrap(self, value, convtToCamelCase, replacements):
         if isinstance(value, (tuple, list, set, frozenset)):
-            return type(value)([self._unwrap(v, convtToCamelCase) for v in value])
+            return type(value)([self._unwrap(v, convtToCamelCase, replacements) for v in value])
         elif type(self)==type(value): # was a dictionary before
-            return value.to_dict(convtToCamelCase)
+            return value.to_dict(convtToCamelCase, replacements)
         else:
             return value
 
-    def to_dict(self, convtToCamelCase=False):
+    def to_dict(self, convtToCamelCase=False, replacements={}):
         d = {}
         for attr, value in self.__dict__.items():
             if convtToCamelCase:
-                newName = inflection.camelize(attr, False)
+                newName = camelizeWithReplacements(attr, False, replacements)
+                #newName = inflection.camelize(attr, False)
             else:
                 newName = attr
-            d[newName] = self._unwrap(value, convtToCamelCase)
+            d[newName] = self._unwrap(value, convtToCamelCase, replacements)
         return d
         #return self.original
 
@@ -916,19 +917,22 @@ def pythonizeKeys(d):
         dNew[newKey] = _unwrap(val, pythonizeKeys)
     return dNew
 
+def camelizeWithReplacements(key, upperCaseFirst=False, replacements={}):
+    if replacements is not None and len(replacements) > 0:
+        parts = key.split('_')
+        #print(parts)
+        for i, p in enumerate(parts):
+            if p in replacements:
+                parts[i] = replacements[p]
+        #print(parts)
+        key = '_'.join(parts)
+        #print(key)
+    return inflection.camelize(key, upperCaseFirst)
+
 def camelizeKeys(d, upperCaseFirst=False, replacements={}):
     dNew = {}
     for key, val in d.items():
-        if replacements is not None and len(replacements) > 0:
-            parts = key.split('_')
-            #print(parts)
-            for i, p in enumerate(parts):
-                if p in replacements:
-                    parts[i] = replacements[p]
-            #print(parts)
-            key = '_'.join(parts)
-            #print(key)
-        newKey = inflection.camelize(key, upperCaseFirst)
+        newKey = camelizeWithReplacements(key, upperCaseFirst, replacements)
         dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst, replacements)
     return dNew
 

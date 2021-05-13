@@ -2095,7 +2095,7 @@ def ToYaml(obj, replacements={}):
     if isinstance(obj, dict):
         return utils.camelizeKeys(obj, False, replacements)
     elif type(obj)==utils.ToClass or str(type(obj))=="<class 'kcclient.utils.ToClass'>":
-        return obj.to_dict(True)
+        return obj.to_dict(True, replacements)
     else:
         return utils.camelizeKeys(getSpecFromObj(obj), False, replacements)
 
