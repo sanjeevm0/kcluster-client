@@ -2097,7 +2097,7 @@ utils.SetToClassIgnore(KubeYamlIgnore)
 def SetKubeYamlIgnore(ignore):
     global KubeYamlIgnore
     KubeYamlIgnore = ignore
-    utils.SetToClassIgnore(ignore)
+    utils.SetToDictIgnore(ignore)
 
 def GetKubeYamlIgnore():
     return KubeYamlIgnore
