@@ -874,6 +874,15 @@ def _convt(exist, name, ignore):
             toConvt = newExist not in ignore
     return toConvt
 
+def buildIgnorePattern(ignore):
+    restr = r"\|("
+    for i in range(len(ignore)):
+        if i != 0:
+            restr += "|"
+        restr += ignore[i].replace('.','|').replace('|','\\|').replace('*','.*')
+    restr += ")"
+    return re.compile(restr)
+
 ToClassIgnore = None
 def SetToClassIgnore(ignore):
     global ToClassIgnore
