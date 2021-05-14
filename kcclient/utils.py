@@ -855,23 +855,49 @@ def convert_to_python_case(name):
     s1 = caseConvtRe1.sub(r'\1_\2', name)
     return caseConvtRe2.sub(r'\1_\2', s1).lower()
 
+def underscore(word):
+    word = re.sub(r"([A-Z]+)([A-Z][a-z])", r'\1_\2', word)
+    word = re.sub(r"([a-z\d])([A-Z])", r'\1_\2', word)
+    #word = word.replace("-", "_") # not good and not needed
+    return word.lower()
+
+def _concat(exist, name):
+    return exist + "|" + name
+
+def _convt(exist, name, ignore):
+    toConvt = True
+    if ignore is not None:
+        newExist = _concat(exist, name)
+        if type(ignore)==re.Pattern:
+            toConvt = not ignore.match(newExist)
+        else:
+            toConvt = newExist not in ignore
+    return toConvt
+
+ToClassIgnore = None
+def SetToClassIgnore(ignore):
+    global ToClassIgnore
+    ToClassIgnore = ignore
+
 from pprint import pformat
 import inflection
 class ToClass(object):
-    def __init__(self, data, convtToPythonCase=False):
+    def __init__(self, data, convtToPythonCase=False, ignore=ToClassIgnore, exist=""):
         #self.original = copy.deepcopy(data)
         for name, value in data.items():
-            if convtToPythonCase:
-                newName = inflection.underscore(name)
+            if convtToPythonCase and _convt(exist, name, ignore):
+                newName = underscore(name)
             else:
                 newName = name
-            setattr(self, newName, self._wrap(value, convtToPythonCase))
+            setattr(self, newName, self._wrap(value, convtToPythonCase, ignore, _concat(exist, name)))
 
-    def _wrap(self, value, convtToPythonCase):
+    def _wrap(self, value, convtToPythonCase, ignore, exist):
         if isinstance(value, (tuple, list, set, frozenset)): 
-            return type(value)([self._wrap(v, convtToPythonCase) for v in value])
+            return type(value)([self._wrap(v, convtToPythonCase, ignore, exist) for v in value])
+        elif isinstance(value, dict):
+            return ToClass(value, convtToPythonCase, ignore, exist)
         else:
-            return ToClass(value, convtToPythonCase) if isinstance(value, dict) else value
+            return value
 
     def __getitem__(self, val):
         return self.__dict__[val]
@@ -882,23 +908,23 @@ class ToClass(object):
     def toDictString(self):
         return '{%s}' % str(', '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.items()))
 
-    def _unwrap(self, value, convtToCamelCase, replacements):
+    def _unwrap(self, value, convtToCamelCase, replacements, ignore, exist):
         if isinstance(value, (tuple, list, set, frozenset)):
-            return type(value)([self._unwrap(v, convtToCamelCase, replacements) for v in value])
+            return type(value)([self._unwrap(v, convtToCamelCase, replacements, ignore, exist) for v in value])
         elif type(self)==type(value): # was a dictionary before
-            return value.to_dict(convtToCamelCase, replacements)
+            return value.to_dict(convtToCamelCase, replacements, ignore, exist)
         else:
             return value
 
-    def to_dict(self, convtToCamelCase=False, replacements={}):
+    def to_dict(self, convtToCamelCase=False, replacements={}, ignore=ToClassIgnore, exist=""):
         d = {}
         for attr, value in self.__dict__.items():
-            if convtToCamelCase:
+            if convtToCamelCase and _convt(exist, attr, ignore):
                 newName = camelizeWithReplacements(attr, False, replacements)
                 #newName = inflection.camelize(attr, False)
             else:
                 newName = attr
-            d[newName] = self._unwrap(value, convtToCamelCase, replacements)
+            d[newName] = self._unwrap(value, convtToCamelCase, replacements, ignore, _concat(exist, attr))
         return d
         #return self.original
 
@@ -910,11 +936,14 @@ def _unwrap(elem, fn, *args):
     else:
         return elem
 
-def pythonizeKeys(d):
+def pythonizeKeys(d, ignore=None, exist=""):
     dNew = {}
     for key, val in d.items():
-        newKey = inflection.underscore(key)
-        dNew[newKey] = _unwrap(val, pythonizeKeys)
+        if _convt(exist, key, ignore):
+            newKey = underscore(key)
+        else:
+            newKey = key
+        dNew[newKey] = _unwrap(val, pythonizeKeys, ignore, _concat(exist, key))
     return dNew
 
 def camelizeWithReplacements(key, upperCaseFirst=False, replacements={}):
@@ -929,11 +958,14 @@ def camelizeWithReplacements(key, upperCaseFirst=False, replacements={}):
         #print(key)
     return inflection.camelize(key, upperCaseFirst)
 
-def camelizeKeys(d, upperCaseFirst=False, replacements={}):
+def camelizeKeys(d, upperCaseFirst=False, replacements={}, ignore=ToClassIgnore, exist=""):
     dNew = {}
     for key, val in d.items():
-        newKey = camelizeWithReplacements(key, upperCaseFirst, replacements)
-        dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst, replacements)
+        if _convt(exist, key, ignore):
+            newKey = camelizeWithReplacements(key, upperCaseFirst, replacements)
+        else:
+            newKey = key
+        dNew[newKey] = _unwrap(val, camelizeKeys, upperCaseFirst, replacements, ignore, _concat(exist, key))
     return dNew
 
 # Text Type:	str

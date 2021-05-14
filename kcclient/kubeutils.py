@@ -2091,13 +2091,16 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
-def ToYaml(obj, replacements={}):
+KubeYamlIgnore = re.compile(r"\|metadata\|(labels|annotations)\|.*")
+utils.SetToClassIgnore(KubeYamlIgnore)
+
+def ToYaml(obj, replacements={}, ignore=KubeYamlIgnore):
     if isinstance(obj, dict):
-        return utils.camelizeKeys(obj, False, replacements)
+        return utils.camelizeKeys(obj, False, replacements, ignore)
     elif type(obj)==utils.ToClass or str(type(obj))=="<class 'kcclient.utils.ToClass'>":
-        return obj.to_dict(True, replacements)
+        return obj.to_dict(True, replacements, ignore)
     else:
-        return utils.camelizeKeys(getSpecFromObj(obj), False, replacements)
+        return utils.camelizeKeys(getSpecFromObj(obj), False, replacements, ignore)
 
 def ToKey(o):
     if type(o)==dict:
