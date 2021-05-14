@@ -744,7 +744,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         try:
             initobjs = listerFn() # keep resource_version unset so that it starts from scratch
             if isinstance(initobjs, dict):
-                initobjs = utils.ToClass(initobjs, True)
+                initobjs = utils.ToClass(initobjs, True, KubeYamlIgnore)
             maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
         except Exception as ex:
             logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
@@ -788,7 +788,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         #print(e)
         #raw = e['raw_object'] # accessible as map
         if isinstance(e['object'], dict):
-            obj = utils.ToClass(e['object'], True)
+            obj = utils.ToClass(e['object'], True, KubeYamlIgnore)
         else:
             obj = e['object']
         maxResVer = obj.metadata.resource_version
@@ -2092,12 +2092,10 @@ def getPodNs():
         return fp.read()
 
 KubeYamlIgnore = re.compile(r"\|metadata\|(labels|annotations)\|.*")
-utils.SetToClassIgnore(KubeYamlIgnore)
 
 def SetKubeYamlIgnore(ignore):
     global KubeYamlIgnore
     KubeYamlIgnore = ignore
-    utils.SetToDictIgnore(ignore)
 
 def GetKubeYamlIgnore():
     return KubeYamlIgnore
