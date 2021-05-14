@@ -2094,6 +2094,11 @@ def getPodNs():
 KubeYamlIgnore = re.compile(r"\|metadata\|(labels|annotations)\|.*")
 utils.SetToClassIgnore(KubeYamlIgnore)
 
+def SetKubeYamlIgnore(ignore):
+    global KubeYamlIgnore
+    KubeYamlIgnore = ignore
+    utils.SetToClassIgnore(ignore)
+
 def ToYaml(obj, replacements={}, ignore=KubeYamlIgnore):
     if isinstance(obj, dict):
         return utils.camelizeKeys(obj, False, replacements, ignore)
