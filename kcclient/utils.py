@@ -864,11 +864,12 @@ def underscore(word):
 def _concat(exist, name):
     return exist + "|" + name
 
+RegexpType = type(re.compile(''))
 def _convt(exist, name, ignore):
     toConvt = True
     if ignore is not None:
         newExist = _concat(exist, name)
-        if type(ignore)==re.Pattern:
+        if type(ignore)==RegexpType: # re.Pattern does not exist < 3.7?
             toConvt = not ignore.match(newExist)
         else:
             toConvt = newExist not in ignore
