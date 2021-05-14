@@ -888,10 +888,15 @@ def SetToClassIgnore(ignore):
     global ToClassIgnore
     ToClassIgnore = ignore
 
+def GetClassIgnore():
+    return ToClassIgnore
+
 from pprint import pformat
 import inflection
 class ToClass(object):
-    def __init__(self, data, convtToPythonCase=False, ignore=ToClassIgnore, exist=""):
+    def __init__(self, data, convtToPythonCase=False, ignore=None, exist=""):
+        if ignore is None:
+            ignore = GetClassIgnore()
         #self.original = copy.deepcopy(data)
         for name, value in data.items():
             if convtToPythonCase and _convt(exist, name, ignore):
@@ -925,7 +930,9 @@ class ToClass(object):
         else:
             return value
 
-    def to_dict(self, convtToCamelCase=False, replacements={}, ignore=ToClassIgnore, exist=""):
+    def to_dict(self, convtToCamelCase=False, replacements={}, ignore=None, exist=""):
+        if ignore is None:
+            ignore = GetClassIgnore()
         d = {}
         for attr, value in self.__dict__.items():
             if convtToCamelCase and _convt(exist, attr, ignore):
@@ -967,7 +974,9 @@ def camelizeWithReplacements(key, upperCaseFirst=False, replacements={}):
         #print(key)
     return inflection.camelize(key, upperCaseFirst)
 
-def camelizeKeys(d, upperCaseFirst=False, replacements={}, ignore=ToClassIgnore, exist=""):
+def camelizeKeys(d, upperCaseFirst=False, replacements={}, ignore=None, exist=""):
+    if ignore is None:
+        ignore = GetClassIgnore()
     dNew = {}
     for key, val in d.items():
         if _convt(exist, key, ignore):

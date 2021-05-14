@@ -2099,7 +2099,12 @@ def SetKubeYamlIgnore(ignore):
     KubeYamlIgnore = ignore
     utils.SetToClassIgnore(ignore)
 
-def ToYaml(obj, replacements={}, ignore=KubeYamlIgnore):
+def GetKubeYamlIgnore():
+    return KubeYamlIgnore
+
+def ToYaml(obj, replacements={}, ignore=None):
+    if ignore is None:
+        ignore = GetKubeYamlIgnore()
     if isinstance(obj, dict):
         return utils.camelizeKeys(obj, False, replacements, ignore)
     elif type(obj)==utils.ToClass or str(type(obj))=="<class 'kcclient.utils.ToClass'>":
