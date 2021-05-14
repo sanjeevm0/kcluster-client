@@ -891,6 +891,14 @@ def SetToClassIgnore(ignore):
 def GetClassIgnore():
     return ToClassIgnore
 
+ToDictIgnore = None
+def SetToDictIgnore(ignore):
+    global ToDictIgnore
+    ToDictIgnore = ignore
+
+def GetDictIgnore():
+    return ToDictIgnore
+
 from pprint import pformat
 import inflection
 class ToClass(object):
@@ -932,7 +940,7 @@ class ToClass(object):
 
     def to_dict(self, convtToCamelCase=False, replacements={}, ignore=None, exist=""):
         if ignore is None:
-            ignore = GetClassIgnore()
+            ignore = GetDictIgnore()
         d = {}
         for attr, value in self.__dict__.items():
             if convtToCamelCase and _convt(exist, attr, ignore):
@@ -976,7 +984,7 @@ def camelizeWithReplacements(key, upperCaseFirst=False, replacements={}):
 
 def camelizeKeys(d, upperCaseFirst=False, replacements={}, ignore=None, exist=""):
     if ignore is None:
-        ignore = GetClassIgnore()
+        ignore = GetDictIgnore() # python->YAML
     dNew = {}
     for key, val in d.items():
         if _convt(exist, key, ignore):
