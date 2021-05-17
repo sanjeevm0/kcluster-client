@@ -1436,6 +1436,7 @@ class Cluster:
         server = kwargs.pop('server')
         apiClient = self.getApiClient(server)
         #print("Call API with: {0} {1}".format(args, kwargs))
+        logger.info("Start API call to server {0} - path {1}".format(server, args[0]))
         return apiClient.call_api(*args, **kwargs)
 
     def call_api(self, *args,
@@ -1458,6 +1459,7 @@ class Cluster:
         server = kwargs.pop('server')
         #print(server)
         methodFn = self.getMethod(server, method)
+        logger.info("Start API server {0} - method {1}".format(server, method))
         return methodFn(*args, **kwargs)
 
     def call_method(self, method, *args, **kwargs):
