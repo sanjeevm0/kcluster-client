@@ -1478,7 +1478,7 @@ class Cluster():
 
     def call_method(self, method, *args, **kwargs):
         if self.useKubectl:
-            return self.call_method_kubectl(self, method, *args, **kwargs)
+            return self.call_method_kubectl(method, *args, **kwargs)
 
         if self.serverFileFixed:
             kwargs.update({'serverFile': self.serverFileFixed})
