@@ -20,6 +20,8 @@ import urllib3
 import atexit
 import inflection
 import traceback
+import subprocess
+import json
 from collections import deque
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -119,7 +121,7 @@ def rmtmp2(name):
     if os.path.exists(name):
         os.remove(name)
 
-def _loadCfgCert2(server, base, ca, cert, key):
+def createTmpKubeConfig(server, base, ca, cert, key):
     cfg = {
         "apiVersion": "v1",
         "kind": "Config",
@@ -158,9 +160,13 @@ def _loadCfgCert2(server, base, ca, cert, key):
         logger.info("Use temp file {0}".format(tmp))
         with open(tmp, 'w') as fp:
             yaml.dump(cfg, fp)
-        kcfg.load_kube_config(tmp)
+        return tmp
     finally:
         atexit.register(rmtmp, fd, tmp)
+
+def _loadCfgCert2(server, base, ca, cert, key):
+    tmp = createTmpKubeConfig(server, base, ca, cert, key)
+    kcfg.load_kube_config(tmp)
 
 # Load CFG from a Kcluster client
 def _loadCfgKclient(id, user):
@@ -1269,7 +1275,7 @@ class ObjTracker:
         return None
 
 # Supports token (e.g. service token, and TLS certs for auth)
-class Cluster:
+class Cluster():
     def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None,
         kubeconfig=None, kubeconfigYaml=None, kubeconfiguser=None, forceOverwrite=True, inPodCluster=False):
         self.name = name
@@ -1295,8 +1301,16 @@ class Cluster:
             self.key = key
             self.serversFixed = servers
             self.serverFileFixed = serverFile
+        if not inPodCluster and self.serversFixed is not None:
+            self.kubeConfigFile = createTmpKubeConfig(self.serversFixed[0], self.base, self.ca, self.cert, self.key)
+        else:
+            self.kubeConfigFile = None
+        self.useKubectl = False
         self.clients = {}
         self.methods = {}
+
+    def setUseKubectl(self, useKubectl):
+        self.useKubectl = useKubectl    
 
     @staticmethod
     def addCmdArgs(parser):
@@ -1463,11 +1477,51 @@ class Cluster:
         return methodFn(*args, **kwargs)
 
     def call_method(self, method, *args, **kwargs):
+        if self.useKubectl:
+            return self.call_method_kubectl(self, method, *args, **kwargs)
+
         if self.serverFileFixed:
             kwargs.update({'serverFile': self.serverFileFixed})
         if self.serversFixed:
             kwargs.update({'servers': self.serversFixed})
         return DoOnServers(self.call_method_server, method, *args, **kwargs)
+
+    def call_method_kubectl(self, method, *args, **kwargs):
+        if method.endswith('_custom_object'):
+            obj = "{0}.{1}".format(kwargs['plural'], kwargs['group'])
+        elif method.endswith('_pod'):
+            obj = "pod"
+        elif method.endswith("_service"):
+            obj = "service"
+        elif method.endswith("_deployment"):
+            obj = "deployment"
+        elif method.endswith("_stateful_set"):
+            obj = "statefulset"
+        else:
+            raise Exception("Not supported {0}".format(method))
+        try:
+            if method.startswith("create_namespaced_"):
+                out = launchFromSpec2(kwargs['body'], kwargs['namespace'], self.kubeConfigFile).lower()
+                return ('created' in out and 'error' not in out), 200, None
+            elif method.startswith("delete_namespaced_"):
+                out = subprocess.check_output("kubectl delete {0} {1} -n {2} --kubeconfig {3}".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
+                return ('deleted' in out and 'error' not in out), 200, None
+            elif method.startswith("patch_namespaced_"):
+                out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
+                    self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'strategic'], shell=True).decode().lower()
+                return 'patched' in out and 'error' not in out, 200, None
+            elif method.startswith("patchjson_namespaced_"):
+                out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
+                    self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'json'], shell=True).decode().lower()
+                return 'patched' in out and 'error' not in out, 200, None
+            elif method.startswith("read_namespaced_"):
+                out = subprocess.check_output("kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile), shell=True)
+                return True, 200, utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
+        except Exception as ex:
+            logger.warning('kubectl encounters exception {0}\n{1}'.format(ex, traceback.format_exc()))
+            return False, 200, None
 
     def call_method1(self, method, *args, **kwargs):
         servers = getServers(self.serverFileFixed, self.serversFixed)
@@ -1592,6 +1646,12 @@ def launchFromSpec(spec, ns):
         yaml.dump(spec, fp)
     os.system("kubectl create -f {0} -n {1}".format(tmp, ns))
     rmtmp(fd, tmp)
+
+def launchFromSpec2(spec, ns, kubeconfig):
+    (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
+    with open(tmp, 'w') as fp:
+        yaml.dump(spec, fp)
+    return subprocess.check_output("kubectl create --kubeconfig {0} -f {1} -n {2}".format(kubeconfig, tmp, ns), shell=True).decode()
 
 def launchFromSpecApi(apiClient, spec, ns=None):
     specNs = copy.deepcopy(spec)
