@@ -1508,12 +1508,18 @@ class Cluster():
                     kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
                 return ('deleted' in out and 'error' not in out), 200, None
             elif method.startswith("patch_namespaced_"):
-                out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
-                    self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'strategic'], shell=True).decode().lower()
+                patchStr = json.dumps(kwargs['body'])
+                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type strategic".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile, patchStr)
+                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
+                # out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
+                #     self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'strategic'], shell=True).decode().lower()
                 return 'patched' in out and 'error' not in out, 200, None
             elif method.startswith("patchjson_namespaced_"):
-                out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
-                    self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'json'], shell=True).decode().lower()
+                patchStr = json.dumps(kwargs['body'])
+                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type json".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile, patchStr)
+                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
                 return 'patched' in out and 'error' not in out, 200, None
             elif method.startswith("read_namespaced_"):
                 out = subprocess.check_output("kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
