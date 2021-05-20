@@ -1504,8 +1504,8 @@ class Cluster():
                 out = launchFromSpec2(kwargs['body'], kwargs['namespace'], self.kubeConfigFile).lower()
                 return ('created' in out and 'error' not in out), 200, None
             elif method.startswith("delete_namespaced_"):
-                out = subprocess.check_output("kubectl delete {0} {1} -n {2} --kubeconfig {3}".format(obj, kwargs['name'],
-                    kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
+                out = subprocess.check_output("kubectl delete {0} {1} -n {2} --kubeconfig {3} --wait=false".format(obj,
+                    kwargs['name'], kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
                 return ('deleted' in out and 'error' not in out), 200, None
             elif method.startswith("patch_namespaced_"):
                 patchStr = json.dumps(kwargs['body'])
@@ -1526,7 +1526,7 @@ class Cluster():
                     kwargs['namespace'], self.kubeConfigFile), shell=True)
                 return True, 200, utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
         except Exception as ex:
-            logger.warning('kubectl encounters exception {0}\n{1}'.format(ex, traceback.format_exc()))
+            logger.debug('kubectl encounters exception {0}\n{1}'.format(ex, traceback.format_exc()))
             return False, 200, None
 
     def call_method1(self, method, *args, **kwargs):
