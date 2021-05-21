@@ -1499,6 +1499,7 @@ class Cluster():
             obj = "statefulset"
         else:
             raise Exception("Not supported {0}".format(method))
+
         try:
             if method.startswith("create_namespaced_"):
                 out = launchFromSpec2(kwargs['body'], kwargs['namespace'], self.kubeConfigFile).lower()
@@ -1507,24 +1508,27 @@ class Cluster():
                 out = subprocess.check_output("kubectl delete {0} {1} -n {2} --kubeconfig {3} --wait=false".format(obj,
                     kwargs['name'], kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
                 return ('deleted' in out and 'error' not in out), 200, None
-            elif method.startswith("patch_namespaced_"):
-                patchStr = json.dumps(kwargs['body'])
-                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type strategic".format(obj, kwargs['name'],
-                    kwargs['namespace'], self.kubeConfigFile, patchStr)
-                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
-                # out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
-                #     self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', 'strategic'], shell=True).decode().lower()
-                return 'patched' in out and 'error' not in out, 200, None
-            elif method.startswith("patchjson_namespaced_"):
-                patchStr = json.dumps(kwargs['body'])
-                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type json".format(obj, kwargs['name'],
-                    kwargs['namespace'], self.kubeConfigFile, patchStr)
-                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
-                return 'patched' in out and 'error' not in out, 200, None
             elif method.startswith("read_namespaced_"):
                 out = subprocess.check_output("kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
                     kwargs['namespace'], self.kubeConfigFile), shell=True)
                 return True, 200, utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
+            else:
+                if method.startswith("patch_namespaced_"):
+                    patchType = "strategic"
+                elif method.startswith("patchmerge_namespaced_"):
+                    patchType = "merge"
+                elif method.startswith("patchjson_namespaced_"):
+                    patchType = "json"
+                else:
+                    raise Exception("Not supported {0}".format(method))
+                patchStr = json.dumps(kwargs['body'])
+                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type {5}".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile, patchStr, patchType)
+                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
+                # out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
+                #     self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', patchType], shell=True).decode().lower()
+                return 'patched' in out and 'error' not in out, 200, None
+
         except Exception as ex:
             logger.debug('kubectl encounters exception {0}\n{1}'.format(ex, traceback.format_exc()))
             return False, 200, None
