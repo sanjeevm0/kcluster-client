@@ -320,15 +320,23 @@ def diffList(x1, x2, ignoreOrder=True):
             diffs.extend(x2[len(x1):])
     else:
         x2C = copy.deepcopy(x2)
-        for x11 in x1:
+        for j, x11 in enumerate(x1):
             found = False
             for i, x21 in enumerate(x2C):
                 if x11 == x21:
                     found = True
                     x2C.pop(i)
                     break
+                (same, subDiff) = diff(x11, x21, ignoreOrder)
+                if same:
+                    found = True
+                    x2C.pop(i)
+                    break
+                if j==i:
+                    subDiffJ = subDiff
             if not found:
-                diffs.append(x11)
+                diffs.append(subDiffJ)
+                x2C.pop(j)
         diffs.extend(x2C) # whatever is leftover and unused
 
     if len(diffs) > 0:
