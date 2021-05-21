@@ -1511,7 +1511,11 @@ class Cluster():
             elif method.startswith("read_namespaced_") or method.startswith("get_namespaced_"):
                 out = subprocess.check_output("kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
                     kwargs['namespace'], self.kubeConfigFile), shell=True)
-                return True, 200, utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
+                if method.startswith("read_namespaced_"):
+                    out = utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
+                else:
+                    out = yaml.safe_load(out)
+                return True, 200, out
             else:
                 if method.startswith("patch_namespaced_"):
                     patchType = "strategic"
