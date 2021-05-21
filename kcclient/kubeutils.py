@@ -1479,6 +1479,7 @@ class Cluster():
     def call_method(self, method, *args, **kwargs):
         if self.useKubectl:
             return self.call_method_kubectl(method, *args, **kwargs)
+        kwargs.pop('wait', None) # remaining does not suppoort "wait" option
 
         if self.serverFileFixed:
             kwargs.update({'serverFile': self.serverFileFixed})
@@ -1505,8 +1506,10 @@ class Cluster():
                 out = launchFromSpec2(kwargs['body'], kwargs['namespace'], self.kubeConfigFile).lower()
                 return ('created' in out and 'error' not in out), 200, None
             elif method.startswith("delete_namespaced_"):
-                cmdStr = "kubectl delete {0} {1} -n {2} --kubeconfig {3} --wait=false".format(obj,
+                cmdStr = "kubectl delete {0} {1} -n {2} --kubeconfig {3}".format(obj,
                     kwargs['name'], kwargs['namespace'], self.kubeConfigFile)
+                if not kwargs.get('wait', False):
+                    cmdStr += " --wait=false"
                 logger.info(cmdStr)
                 out = subprocess.check_output(cmdStr, shell=True).decode().lower()
                 return ('deleted' in out and 'error' not in out), 200, None
