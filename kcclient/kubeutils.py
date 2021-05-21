@@ -1505,12 +1505,16 @@ class Cluster():
                 out = launchFromSpec2(kwargs['body'], kwargs['namespace'], self.kubeConfigFile).lower()
                 return ('created' in out and 'error' not in out), 200, None
             elif method.startswith("delete_namespaced_"):
-                out = subprocess.check_output("kubectl delete {0} {1} -n {2} --kubeconfig {3} --wait=false".format(obj,
-                    kwargs['name'], kwargs['namespace'], self.kubeConfigFile), shell=True).decode().lower()
+                cmdStr = "kubectl delete {0} {1} -n {2} --kubeconfig {3} --wait=false".format(obj,
+                    kwargs['name'], kwargs['namespace'], self.kubeConfigFile)
+                logger.info(cmdStr)
+                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
                 return ('deleted' in out and 'error' not in out), 200, None
             elif method.startswith("read_namespaced_") or method.startswith("get_namespaced_"):
-                out = subprocess.check_output("kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
-                    kwargs['namespace'], self.kubeConfigFile), shell=True)
+                cmdStr = "kubectl get {0} {1} -n {2} --kubeconfig {3} -o yaml".format(obj, kwargs['name'],
+                    kwargs['namespace'], self.kubeConfigFile)
+                logger.info(cmdStr)
+                out = subprocess.check_output(cmdStr, shell=True)
                 if method.startswith("read_namespaced_"):
                     out = utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
                 else:
@@ -1528,6 +1532,7 @@ class Cluster():
                 patchStr = json.dumps(kwargs['body'])
                 cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type {5}".format(obj, kwargs['name'],
                     kwargs['namespace'], self.kubeConfigFile, patchStr, patchType)
+                logger.info(cmdStr)
                 out = subprocess.check_output(cmdStr, shell=True).decode().lower()
                 # out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
                 #     self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', patchType], shell=True).decode().lower()
@@ -1662,10 +1667,14 @@ def launchFromSpec(spec, ns):
     rmtmp(fd, tmp)
 
 def launchFromSpec2(spec, ns, kubeconfig):
-    (fd, tmp) = tempfile.mkstemp(suffix=".yaml")
+    fd, tmp = tempfile.mkstemp(suffix=".yaml")
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
-    return subprocess.check_output("kubectl create --kubeconfig {0} -f {1} -n {2}".format(kubeconfig, tmp, ns), shell=True).decode()
+    cmdStr = "kubectl create --kubeconfig {0} -f {1} -n {2}".format(kubeconfig, tmp, ns)
+    logger.info(cmdStr)
+    ret = subprocess.check_output(cmdStr, shell=True).decode()
+    rmtmp(fd, tmp)
+    return ret
 
 def launchFromSpecApi(apiClient, spec, ns=None):
     specNs = copy.deepcopy(spec)
@@ -2167,7 +2176,8 @@ def getPodNs():
     with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as fp:
         return fp.read()
 
-KubeYamlIgnore = re.compile(r"\|metadata\|(labels|annotations)\|.*")
+#KubeYamlIgnore = re.compile(r"\|metadata\|(labels|annotations)\|.*")
+KubeYamlIgnore = utils.buildIgnorePattern(['*.labels.*', '*.annotations.*'])
 
 def SetKubeYamlIgnore(ignore):
     global KubeYamlIgnore
