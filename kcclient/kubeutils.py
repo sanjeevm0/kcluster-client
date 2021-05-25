@@ -1533,10 +1533,13 @@ class Cluster():
                 else:
                     raise Exception("Not supported {0}".format(method))
                 patchStr = json.dumps(kwargs['body'])
-                cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type {5}".format(obj, kwargs['name'],
-                    kwargs['namespace'], self.kubeConfigFile, patchStr, patchType)
-                logger.info(cmdStr)
-                out = subprocess.check_output(cmdStr, shell=True).decode().lower()
+                if "'" in patchStr:
+                    out = patchFromSpec2(patchStr, obj, kwargs['namespace'], kwargs['name'], patchType, self.kubeConfigFile).lower()
+                else:
+                    cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p '{4}' --type {5}".format(obj, kwargs['name'],
+                        kwargs['namespace'], self.kubeConfigFile, patchStr, patchType)
+                    logger.info(cmdStr)
+                    out = subprocess.check_output(cmdStr, shell=True).decode().lower()
                 # out = subprocess.check_output(['kubectl', 'patch', obj, kwargs['name'], '-n', kwargs['namespace'], '--kubeconfig',
                 #     self.kubeConfigFile, '-p', json.dumps(kwargs['body']), '--type', patchType], shell=True).decode().lower()
                 return 'patched' in out and 'error' not in out, 200, None
@@ -1674,6 +1677,17 @@ def launchFromSpec2(spec, ns, kubeconfig):
     with open(tmp, 'w') as fp:
         yaml.dump(spec, fp)
     cmdStr = "kubectl create --kubeconfig {0} -f {1} -n {2}".format(kubeconfig, tmp, ns)
+    logger.info(cmdStr)
+    ret = subprocess.check_output(cmdStr, shell=True).decode()
+    rmtmp(fd, tmp)
+    return ret
+
+def patchFromSpec2(specJson, obj, ns, name, patchType, kubeconfig):
+    fd, tmp = tempfile.mkstemp(suffix=".yaml")
+    with open(tmp, 'w') as fp:
+        fp.write(specJson) # dump json
+    cmdStr = "kubectl patch {0} {1} -n {2} --kubeconfig {3} -p \"$(cat '{4}')\" --type {5}".format(obj, name, ns, 
+        kubeconfig, tmp, patchType)
     logger.info(cmdStr)
     ret = subprocess.check_output(cmdStr, shell=True).decode()
     rmtmp(fd, tmp)
