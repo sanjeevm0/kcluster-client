@@ -612,6 +612,28 @@ def dumpYaml(x, outfile):
     with open(outfile, 'w') as fp:
         yaml.dump(x, fp)
 
+def replWithEnvVar(v):
+    while True:
+        m = re.match(r'(.*?)(\$.*?)([\/\\\$]|$|\s)(.*)', v)
+        if m is None:
+            break
+        v = m.group(1) + os.getenv(m.group(2)[1:]).replace('\\','/') + m.group(3) + m.group(4)
+    return v
+
+def replEnvVar(p):
+    if type(p)==str:
+        return replWithEnvVar(p)
+    elif type(p)==list:
+        return [replEnvVar(x) for x in p]
+    elif type(p)==dict:
+        return {replWithEnvVar(k): replEnvVar(v) for k, v in p.items()}
+    else:
+        return copy.deepcopy(p)
+
+def loadYamlRepl(file):
+    with open(file, 'r') as fp:
+        return replEnvVar(yaml.safe_load(fp))
+
 from pathlib import Path
 def mkdir(dir):
     path = Path(dir)
