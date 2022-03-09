@@ -25,7 +25,7 @@ def helmRender(template, values, name="templater"):
         with open("{0}/values.yaml".format(tmpdirname), "w") as fp:
             yaml.safe_dump(values, fp)
         #system("helm template {0} {1}".format(name, tmpdirname))
-        return subprocess.check_output("helm template {0} {1}".format(name, tmpdirname)).decode()
+        return subprocess.check_output("helm template {0} {1}".format(name, tmpdirname), shell=True).decode()
 
 if __name__=="__main__":
     print(helmRender("flannel.yaml", {"InterfaceName": "eno1"}))
