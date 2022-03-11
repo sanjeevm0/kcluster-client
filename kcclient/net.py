@@ -2,8 +2,7 @@ import netifaces
 import json
 import re
 import copy
-
-from yaml import safe_dump
+import utils
 
 names = {
     netifaces.AF_LINK: 'mac',
@@ -55,9 +54,7 @@ def getNameForIpv4(ip, sshid=None, machine=None):
 import subprocess
 
 def getInterfacesRemote(sshid, machine):
-    cmd = 'ssh -i {0} {1} ifconfig'.format(sshid, machine)
-    print(cmd)
-    ifconfig = subprocess.check_output(cmd, shell=True).decode().split('\n\n')
+    ifconfig = utils.runOut('ifconfig', machine, sshid, sudo=False, verbose=True).split('\n\n')
     addr = {}
     for interface in ifconfig:
         lines = interface.split('\n')
@@ -74,21 +71,9 @@ def getInterfacesRemote(sshid, machine):
                 addr[intName][namesIfconfig[vals[0]]] = {'addr': vals[1]}
     return addr
 
-def run(sshid, machine, sudo, cmd):
-    if sudo==False:
-        sudo=""
-    if sudo==True:
-        sudo="sudo "
-    if sshid is None or machine is None:
-        cmd = '{0}{1}'.format(sudo, cmd)
-    else:
-        cmd = 'ssh -i {0} {1} "{2}{3}"'.format(sshid, machine, sudo, cmd)
-    print(cmd)
-    return subprocess.check_output(cmd, shell=True).decode()
-
 def addPCI(addr, sshid=None, machine=None, sudo=True):
     try:
-        infoStr = run(sshid, machine, sudo, "lshw -c network -json")
+        infoStr = utils.runOut("lshw -c network -json", machine, sshid, sudo)
         infoStr = re.sub(r'\}\s*\{', '},{', infoStr)
         info = json.loads("[{0}]".format(infoStr))
         for interface in info:
@@ -103,9 +88,9 @@ def addPCI(addr, sshid=None, machine=None, sudo=True):
                 if "vendor" in interface:
                     addr[name]["vendor"] = interface["vendor"]
                 try:
-                    addr[name]["numa_node"] = int(run(sshid, machine, sudo, "cat /sys/class/net/{0}/device/numa_node".format(name)).strip())
-                    addr[name]["local_cpus"] = run(sshid, machine, sudo, "cat /sys/class/net/{0}/device/local_cpus".format(name)).strip()
-                    addr[name]["local_cpulist"] = run(sshid, machine, sudo, "cat /sys/class/net/{0}/device/local_cpulist".format(name)).strip()
+                    addr[name]["numa_node"] = int(utils.runOut("cat /sys/class/net/{0}/device/numa_node".format(name), machine, sshid, sudo, True).strip())
+                    addr[name]["local_cpus"] = utils.runOut("cat /sys/class/net/{0}/device/local_cpus".format(name), machine, sshid, sudo, True).strip()
+                    addr[name]["local_cpulist"] = utils.runOut("cat /sys/class/net/{0}/device/local_cpulist".format(name), machine, sshid, sudo, True).strip()
                 except Exception:
                     pass
     except Exception as e:
@@ -142,7 +127,8 @@ if __name__=="__main__":
     #print()
     home = os.getenv('HOME')
     print(yaml.safe_dump(getInterfaces()))
-    interfaces = getInterfaces('{0}/.ssh/orion'.format(home), 'sanjeevm@roce94')
+    #interfaces = getInterfaces('{0}/.ssh/orion'.format(home), 'sanjeevm@roce94')
+    interfaces = getInterfaces(None, 'sanjeevm@roce94')
     print(yaml.safe_dump(interfaces))
     interfaces2 = reorderByPCI(interfaces)
     print(yaml.safe_dump(interfaces2))

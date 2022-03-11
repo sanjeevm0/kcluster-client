@@ -65,6 +65,33 @@ def random_string_lud(length):
     letters = string.ascii_lowercase + string.ascii_uppercase + string.digits
     return ''.join(random.choice(letters) for i in range(length))  
 
+def getCmd(cmd, machine=None, sshid=None, sudo=False):
+    if sudo==False:
+        sudo=""
+    if sudo==True:
+        sudo="sudo "
+    if machine is None:
+        return '{0}{1}'.format(sudo, cmd)
+    elif sshid is None:
+        return 'ssh {0} "{1}{2}"'.format(machine, sudo, cmd)
+    else:
+        return 'ssh -i {0} {1} "{2}{3}"'.format(sshid, machine, sudo, cmd)
+
+def run(cmd, machine=None, sshid=None, sudo=False, verbose=False):
+    cmdR = getCmd(cmd, machine, sshid, sudo)
+    if verbose:
+        print(cmdR)
+    os.system(cmdR)
+
+def runOut(cmd, machine=None, sshid=None, sudo=False, verbose=False):
+    cmdR = getCmd(cmd, machine, sshid, sudo)
+    if verbose:
+        print(cmdR)
+    return subprocess.check_output(cmdR, shell=True).decode().strip()
+
+def runYaml(cmd, machine=None, sshid=None, sudo=False, verbose=False):
+    return yaml.safe_load(runOut(cmd, machine, sshid, sudo, verbose))
+
 def yaml_cmd(cmd):
     try:
         output = subprocess.check_output(cmd, shell=True)
