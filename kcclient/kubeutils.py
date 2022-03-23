@@ -1133,6 +1133,7 @@ class ObjTracker:
         if 'key' in obj:
             raise Exception("Already has a field called key")
         obj['key'] = key
+        obj['typekey'] = obj['kind'] + "/" + obj['key']
 
         if not predicate(obj):
             return False, False, obj
@@ -2217,7 +2218,13 @@ def ToKey(o):
     if type(o)==dict:
         return o['metadata']['namespace'] + "/" + o['metadata']['name']
     else:
-        return o.metadata.namespace + "/" + o.metadata.name   
+        return o.metadata.namespace + "/" + o.metadata.name
+
+def ToTypeKey(o):
+    if type(o)==dict:
+        return o['kind'] + "/" + o['metadata']['namespace'] + "/" + o['metadata']['name']
+    else:
+        return getKind(o) + "/" + o.metadata.namespace + "/" + o.metadata.name
 
 def findDeploymentForPod(pod, deployments):
     # In, NotIn, Exists, and DoesNotExist. The values set must be non-empty in the case of In and NotIn. 
