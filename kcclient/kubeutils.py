@@ -23,6 +23,8 @@ import traceback
 import subprocess
 import json
 from collections import deque
+from functools import partial
+from typing import Dict, Tuple
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import log
@@ -1106,6 +1108,15 @@ class ObjTracker:
         self.init = False
         self.lock = threading.RLock()
 
+        # for standard callback, use setParams to set
+        self.event = None
+        self.predicate = None
+        self.replacements = {}
+        self.updaetObj = False
+        self.addlCallback = None
+        self.useUid = False
+        self.trackedObjs = {}
+
     # try-catch callback with optional lock
     @staticmethod
     def TryCb(cb, lock, evType, obj, init, objPrev):
@@ -1118,10 +1129,30 @@ class ObjTracker:
         except Exception as ex:
             logger.error("ERROR: {0} {1}".format(ex, traceback.format_exc()))
 
+    def setDefaultCallback(self, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
+        addlCallback=None, callbackLock=None, useUid=False):
+
+        self.event = event
+        self.predicate = predicate
+        self.replacements = replacements
+        self.updaetObj = updateObj
+        self.addlCallback = addlCallback
+        self.useUid = useUid
+        # update the callback
+        self.callback = partial(ObjTracker.TryCb, self.standardCallback, callbackLock)
+
+    def standardCallback(self, evType, obj, init, objPrev):
+        process, deleted, objD = ObjTracker.ProcessObj(self.predicate, evType, obj, self.trackedObjs,
+            replacements=self.replacements, updateObj=self.updateObj, useUid=self.useUid)
+        if self.addlCallback is not None:
+            self.addlCallback(evType, process, deleted, objD)
+        if self.event is not None:
+            self.event.set()
+
     # A standard callback which keeps objects in "objs" by key (using toKey)
     # returns (processed, deleted) tuple
     @staticmethod
-    def ProcessObj(predicate, evType, obj, objs, replacements={}):
+    def ProcessObj(predicate, evType, obj, objs, replacements={}, updateObj=False, useUid=False):
         if obj is None:
             return False, False, None
 
@@ -1142,7 +1173,12 @@ class ObjTracker:
             objs.pop(key, None)
             return True, True, obj
 
-        objs[key] = copy.deepcopy(obj)
+        if useUid:
+            key = obj['metadata']['uid']
+        if updateObj:
+            utils.updateToVal(objs, key, copy.deepcopy(obj))
+        else:
+            objs[key] = copy.deepcopy(obj)
         return True, False, obj
 
     # init=True implies performing init
@@ -1309,6 +1345,7 @@ class Cluster():
         self.useKubectl = False
         self.clients = {}
         self.methods = {}
+        self.trackers : dict[str, Tuple[ObjTracker, dict]] = {} # options
 
     def setUseKubectl(self, useKubectl):
         self.useKubectl = useKubectl    
@@ -1408,6 +1445,47 @@ class Cluster():
         else:
             return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
                 base=self.base, ca=self.ca, cert=self.cert, key=self.key)
+
+    def addTracker(self, name, watchMethod, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
+        addlCallback=None, callbackLock=None, useUid=False, writeBackUpdates=False, 
+        timeout_seconds=0, stopMethod = lambda : False, sharedCtx = {}):
+ 
+        writeServerFile = (len(self.trackers)==0)
+        t = self.tracker(sharedCtx, stopMethod, watchMethod, callback=None, writeServerFile=writeServerFile,
+            timeout_seconds=timeout_seconds)
+        t.setDefaultCallback(event, predicate, replacements, updateObj, addlCallback, callbackLock, useUid)
+        self.trackers[name] = (t, {'writeBackUpdates': writeBackUpdates})
+        return t
+
+    def startTrackers(self):
+        for _, (t, _) in self.trackers.items():
+            t.start()
+
+    # processOne gets snapshot dictionary of items
+    def processLoop(self, processOne, event : threading.Event, loopLock : threading.RLock):
+        while True:
+            event.wait()
+            writeBack = False
+            with loopLock:
+                event.clear()
+                objs = {}
+                for tname, (t, opt) in self.trackers.items():
+                    if not t.init:
+                        continue # not all init yet
+                    objs[tname] = copy.deepcopy(t.trackedObjs)
+                    writeBack = writeBack or opt['writeBackUpdates']
+
+            processOne(objs)
+
+            if writeBack:
+                with loopLock:
+                    for _, (t, _) in self.trackers.items():
+                        t.trackedObjs = copy.deepcopy(objs[tname]) # keep updates made intact
+
+    def processLoopThread(self, processOne, event, loopLock):
+        t = threading.Thread(target=self.processLoop, args=(processOne, event, loopLock))
+        t.daemon = True
+        return t
 
     def getApiClient(self, server):
         if server not in self.clients:
