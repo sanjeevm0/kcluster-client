@@ -2294,15 +2294,21 @@ def ToYaml(obj, replacements={}, ignore=None):
 
 def ToKey(o):
     if type(o)==dict:
-        return o['metadata']['namespace'] + "/" + o['metadata']['name']
+        if 'namespace' not in o['metadata'] or o['metadata']['namespace'] is None:
+            return o['metadata']['name']
+        else:
+            return o['metadata']['namespace'] + "/" + o['metadata']['name']
     else:
-        return o.metadata.namespace + "/" + o.metadata.name
+        if o.metadata.namespace is None:
+            return o.metadata.name
+        else:
+            return o.metadata.namespace + "/" + o.metadata.name
 
 def ToTypeKey(o):
     if type(o)==dict:
-        return o['kind'] + "/" + o['metadata']['namespace'] + "/" + o['metadata']['name']
+        return o['kind'] + "/" + ToKey(o)
     else:
-        return getKind(o) + "/" + o.metadata.namespace + "/" + o.metadata.name
+        return getKind(o) + "/" + ToKey(o)
 
 def findDeploymentForPod(pod, deployments):
     # In, NotIn, Exists, and DoesNotExist. The values set must be non-empty in the case of In and NotIn. 
