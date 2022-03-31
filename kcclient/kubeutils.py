@@ -1135,7 +1135,7 @@ class ObjTracker:
         self.event = event
         self.predicate = predicate
         self.replacements = replacements
-        self.updaetObj = updateObj
+        self.updateObj = updateObj
         self.addlCallback = addlCallback
         self.useUid = useUid
         # update the callback
