@@ -1163,21 +1163,24 @@ class ObjTracker:
         obj = ToYaml(obj, replacements) # replace _ip_ with _IP_ (e.g. for IP addresses)
         if obj['kind']=="Pod":
             obj['running'] = podRunning(objO)
-        key = ToKey(obj)
         if 'key' in obj:
             raise Exception("Already has a field called key")
-        obj['key'] = key
+        obj['key'] = ToKey(obj)
         obj['typekey'] = obj['kind'] + "/" + obj['key']
 
+        if useUid:
+            key = obj['metadata']['uid']
+        else:
+            key = obj['key']
+
         if not predicate(obj):
+            objs.pop(key, None)
             return False, False, obj
 
         if utils.getValDef(obj, ['metadata', 'deletionTimestamp'], None, None) is not None or evType=="deleted":
             objs.pop(key, None)
             return True, True, obj
 
-        if useUid:
-            key = obj['metadata']['uid']
         if updateObj:
             utils.updateToVal(objs, key, copy.deepcopy(obj))
         else:
