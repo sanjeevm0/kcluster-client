@@ -1145,11 +1145,11 @@ class ObjTracker:
     def standardCallback(self, evType, obj, init, objPrev):
         process, deleted, objD = ObjTracker.ProcessObj(self.predicate, evType, obj, self.trackedObjs,
             replacements=self.replacements, updateObj=self.updateObj, useUid=self.useUid)
-        if not process:
+        if not process and evType!="none":
             return # no need to process, predicate not met
         if self.addlCallback is not None:
             self.addlCallback(evType, deleted, objD)
-        if self.event is not None and (self.setEventOnDelete or not deleted):
+        if self.event is not None and (evType=="none" or self.setEventOnDelete or not deleted):
             self.event.set()
 
     # A standard callback which keeps objects in "objs" by key (using toKey)
@@ -1457,6 +1457,7 @@ class Cluster():
         t = self.tracker(sharedCtx, stopMethod, watchMethod, callback=None, writeServerFile=writeServerFile,
             timeout_seconds=timeout_seconds)
         t.setDefaultCallback(event, predicate, replacements, updateObj, addlCallback, callbackLock, useUid, setEventOnDelete)
+        logger.info("Add tracker with name {0} for method {1}".format(name, watchMethod))
         self.trackers[name] = (t, {'writeBackUpdates': writeBackUpdates})
         return t
 
@@ -1472,17 +1473,21 @@ class Cluster():
             with loopLock:
                 event.clear()
                 objs = {}
+                init = True
                 for tname, (t, opt) in self.trackers.items():
                     if not t.init:
-                        continue # not all init yet
+                        init = False # not init yet
+                        break
                     objs[tname] = copy.deepcopy(t.trackedObjs)
                     writeBack = writeBack or opt['writeBackUpdates']
+                if not init:
+                    continue
 
             processOne(objs)
 
             if writeBack:
                 with loopLock:
-                    for _, (t, _) in self.trackers.items():
+                    for tname, (t, _) in self.trackers.items():
                         t.trackedObjs = copy.deepcopy(objs[tname]) # keep updates made intact
 
     def processLoopThread(self, processOne, event, loopLock):
