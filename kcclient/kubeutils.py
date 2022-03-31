@@ -1451,11 +1451,11 @@ class Cluster():
 
     def addTracker(self, name, watchMethod, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
         addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True, writeBackUpdates=False, 
-        timeout_seconds=0, stopMethod = lambda : False, sharedCtx = {}):
+        timeout_seconds=0, stopMethod = lambda : False, sharedCtx = {}, **kwargs):
  
         writeServerFile = (len(self.trackers)==0)
         t = self.tracker(sharedCtx, stopMethod, watchMethod, callback=None, writeServerFile=writeServerFile,
-            timeout_seconds=timeout_seconds)
+            timeout_seconds=timeout_seconds, **kwargs)
         t.setDefaultCallback(event, predicate, replacements, updateObj, addlCallback, callbackLock, useUid, setEventOnDelete)
         logger.info("Add tracker with name {0} for method {1}".format(name, watchMethod))
         self.trackers[name] = (t, {'writeBackUpdates': writeBackUpdates})
