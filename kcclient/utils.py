@@ -431,7 +431,7 @@ def convtToDic(c, commonKeys):
     if isinstance(c, dict):
         for k, v in c.items():
             if type(v) in [dict, list]:
-                cN[k] = convtToDic(v)
+                cN[k] = convtToDic(v, commonKeys)
             else:
                 cN[k] = v
     elif isinstance(c, list):
@@ -444,7 +444,7 @@ def convtToDic(c, commonKeys):
                 for k in commonKeys:
                     if k in v:
                         #print("Use key {0}".format(k))
-                        cN[v[k]] = convtToDic(v)
+                        cN[v[k]] = convtToDic(v, commonKeys)
                         break
                 if not found:
                     raise Exception("Can't find common key in {0}".format(v))
