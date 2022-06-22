@@ -426,6 +426,34 @@ def diffJSON(xN, xO):
     else:
         return diff
 
+def convtToDic(c, commonKeys):
+    cN = {}
+    if isinstance(c, dict):
+        for k, v in c.items():
+            if type(v) in [dict, list]:
+                cN[k] = convtToDic(v)
+            else:
+                cN[k] = v
+    elif isinstance(c, list):
+        for v in c:
+            if isinstance(v, list):
+                print("Don't know")
+                raise Exception("Can't handle {0}".format(c))
+            elif isinstance(v, dict):
+                found = True
+                for k in commonKeys:
+                    if k in v:
+                        #print("Use key {0}".format(k))
+                        cN[v[k]] = convtToDic(v)
+                        break
+                if not found:
+                    raise Exception("Can't find common key in {0}".format(v))
+            else:
+                cN[v] = v
+    else:
+        raise Exception("Should be list or dict")
+    return cN
+
 def dictUse(key, x):
     if key in x:
         return (isinstance(x[key], dict), x[key])
