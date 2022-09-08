@@ -2463,3 +2463,29 @@ def mergeInto(existFile, *args, failOnExist=True, newUser=None, newCluster=None,
     utils.dumpYaml(exist, tmp)
     utils.replaceSave(existFile, tmp)
     return exist
+
+# str read_namespaced_pod_log(name, namespace, container=container, follow=follow, 
+#                             insecure_skip_tls_verify_backend=insecure_skip_tls_verify_backend, 
+#                             limit_bytes=limit_bytes, pretty=pretty, previous=previous, since_seconds=since_seconds, 
+#                             tail_lines=tail_lines, timestamps=timestamps)
+class K8sLogWatch():
+    # cb takes in string, returns whether to continue watch
+    def __init__(self, cb, cluster, podName, namespace, finisher=None, **kwargs):
+        self.cluster = cluster
+        self.cb = cb
+        self.finisher = finisher
+        client, api, method = cluster.getMethodAndClient(cluster.serversFixed[0], 'read_namespaced_pod_log')
+        kwargs['follow'] = True  # else no need to watch
+        w = kubernetes.watch.Watch()
+        self.watcher = w.stream(method, namespace=namespace, name=podName, **kwargs)
+        t = threading.Thread(target=self.doWatch)
+        t.daemon = True
+        t.start()
+
+    def doWatch(self):
+        keepGoing = True
+        while keepGoing:
+            e = next(self.watcher)
+            keepGoing = self.cb(e)
+        if self.finisher is not None:
+            self.finisher()
