@@ -2478,6 +2478,7 @@ class K8sLogWatch():
         kwargs['follow'] = True  # else no need to watch
         w = watch.Watch()
         self.watcher = w.stream(method, namespace=namespace, name=podName, **kwargs)
+        self.conditionMet = False
         t = threading.Thread(target=self.doWatch)
         t.daemon = True
         t.start()
@@ -2488,7 +2489,11 @@ class K8sLogWatch():
             try:
                 e = next(self.watcher)
                 keepGoing = self.cb(e)
+                if not keepGoing:
+                    self.conditionMet = True
             except StopIteration:
+                keepGoing = False # thread terminates but condition not met
+            except Exception:
                 keepGoing = False # thread terminates
         if self.finisher is not None:
             self.finisher()
