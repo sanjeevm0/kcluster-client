@@ -2474,6 +2474,8 @@ class K8sLogWatch():
         self.cluster = cluster
         self.cb = cb
         self.finisher = finisher
+        self.namespace = namespace
+        self.podName = podName
         client, api, method = cluster.getMethodAndClient(cluster.serversFixed[0], 'read_namespaced_pod_log')
         kwargs['follow'] = True  # else no need to watch
         w = watch.Watch()
@@ -2491,9 +2493,12 @@ class K8sLogWatch():
                 keepGoing = self.cb(e)
                 if not keepGoing:
                     self.conditionMet = True
+                    logger.info("{0}/{1} meets condition".format(self.namespace, self.podName))
             except StopIteration:
                 keepGoing = False # thread terminates but condition not met
-            except Exception:
+                logger.info("{0}/{1} iteration stops - pod terminated".format(self.namespace, self.podName))
+            except Exception as ex:
                 keepGoing = False # thread terminates
+                logger.error("{0}/{1} encounters exception {2}".format(self.namespace, self.podName, ex))
         if self.finisher is not None:
             self.finisher()
