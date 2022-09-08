@@ -2485,7 +2485,10 @@ class K8sLogWatch():
     def doWatch(self):
         keepGoing = True
         while keepGoing:
-            e = next(self.watcher)
-            keepGoing = self.cb(e)
+            try:
+                e = next(self.watcher)
+                keepGoing = self.cb(e)
+            except StopIteration:
+                keepGoing = False # thread terminates
         if self.finisher is not None:
             self.finisher()
