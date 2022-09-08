@@ -2476,7 +2476,7 @@ class K8sLogWatch():
         self.finisher = finisher
         client, api, method = cluster.getMethodAndClient(cluster.serversFixed[0], 'read_namespaced_pod_log')
         kwargs['follow'] = True  # else no need to watch
-        w = kubernetes.watch.Watch()
+        w = watch.Watch()
         self.watcher = w.stream(method, namespace=namespace, name=podName, **kwargs)
         t = threading.Thread(target=self.doWatch)
         t.daemon = True
