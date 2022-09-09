@@ -2468,7 +2468,7 @@ def mergeInto(existFile, *args, failOnExist=True, newUser=None, newCluster=None,
 #                             insecure_skip_tls_verify_backend=insecure_skip_tls_verify_backend, 
 #                             limit_bytes=limit_bytes, pretty=pretty, previous=previous, since_seconds=since_seconds, 
 #                             tail_lines=tail_lines, timestamps=timestamps)
-class K8sLogWatch():
+class LogWatch():
     # cb takes in string, returns whether to continue watch
     def __init__(self, cb, cluster, podName, namespace, finisher=None, **kwargs):
         self.cluster = cluster
