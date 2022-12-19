@@ -11,7 +11,7 @@ def mkdir(dir):
 
 loggers = {}
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None):
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2):
     global logger
     if loggerName not in loggers:
         if loggerName is None:
@@ -21,7 +21,10 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
         #print("Level: {0}".format(level))
         logger.setLevel(level)
         mkdir(path.dirname(filename))
-        logfh = logging.FileHandler(filename, mode=mode)
+        if backupCount < 0:
+            logfh = logging.FileHandler(filename, mode=mode)
+        else:
+            logfh = logging.handlers.RotatingFileHandler(filename, mode=mode, maxBytes=10*1024*1024, backupCount=backupCount)
         logfh.setLevel(level)
         logger.addHandler(logfh)
         logprt = logging.StreamHandler(sys.stdout)
