@@ -2478,16 +2478,20 @@ class LogWatch():
         self.podName = podName
         client, api, method = cluster.getMethodAndClient(cluster.serversFixed[0], 'read_namespaced_pod_log')
         kwargs['follow'] = True  # else no need to watch
-        w = watch.Watch()
-        self.watcher = w.stream(method, namespace=namespace, name=podName, **kwargs)
+        self.w = watch.Watch()
+        self.watcher = self.w.stream(method, namespace=namespace, name=podName, **kwargs)
         self.conditionMet = False
+        self.stopped = False
         t = threading.Thread(target=self.doWatch)
         t.daemon = True
         t.start()
 
+    def stop(self):
+        self.stopped = True
+
     def doWatch(self):
         keepGoing = True
-        while keepGoing:
+        while not self.stopped and keepGoing:
             try:
                 e = next(self.watcher)
                 keepGoing = self.cb(e)
@@ -2500,5 +2504,9 @@ class LogWatch():
             except Exception as ex:
                 keepGoing = False # thread terminates
                 logger.error("{0}/{1} encounters exception {2}".format(self.namespace, self.podName, ex))
+        try:
+            self.w.stop()
+        except Exception:
+            pass
         if self.finisher is not None:
             self.finisher()
