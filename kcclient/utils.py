@@ -855,6 +855,46 @@ def popFromVal(x, key, v, splitChar=".", defVal=[]):
                 ret.append(curVal.pop(key))
         return ret if vIsList else ret[0]
 
+# oper is "set", "extend", "append", or "update", int key implies array
+def setValA(x, keys, val, oper="set", deepcopy=True):
+    key = keys.pop(0)
+    if x is None:
+        if isinstance(key, int):
+            x = []
+        elif isinstance(key, str):
+            x = {}
+    if len(keys)==0:
+        if oper=='set':
+            if deepcopy:
+                x[key] = copy.deepcopy(val)
+            else:
+                x[key] = val
+        else:
+            if key not in x:
+                if oper in ['extend', 'append']:
+                    x[key] = []
+                elif oper in ['update']:
+                    x[key] = {}
+            if deepcopy:
+                eval('x[key].{0}(copy.deepcopy(val))'.format(oper))
+            else:
+                eval('x[key].{0}(val)'.format(oper))
+        return x
+    else:
+        x[key] = setVal(x.get(key, None), keys, val, oper, deepcopy)
+        return x
+
+def getValA(x, keys, defval=None):
+    key = keys.pop(0)
+    if ((isinstance(key, int) and isinstance(x, list) and key < len(x)-1) or 
+        (isinstance(key, str) and isinstance(x, dict) and key in x)):
+        if len(keys)==0:
+            return x[key]
+        else:
+            return getVal(x[key], keys, defval)
+    else:
+        return defval
+
 class atomicInt():
     def __init__(self, initValue):
         self.val = initValue
