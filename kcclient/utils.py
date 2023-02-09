@@ -881,7 +881,7 @@ def setValA(x, keys, val, oper="set", deepcopy=True):
                 eval('x[key].{0}(val)'.format(oper))
         return x
     else:
-        x[key] = setVal(x.get(key, None), keys, val, oper, deepcopy)
+        x[key] = setValA(x.get(key, None), keys, val, oper, deepcopy)
         return x
 
 def getValA(x, keys, defval=None):
@@ -891,7 +891,7 @@ def getValA(x, keys, defval=None):
         if len(keys)==0:
             return x[key]
         else:
-            return getVal(x[key], keys, defval)
+            return getValA(x[key], keys, defval)
     else:
         return defval
 
