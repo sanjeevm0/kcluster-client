@@ -952,11 +952,12 @@ def getServers(serverFile, servers):
     return None
 
 def DoOnServers(doer, *args, **kwargs):
-    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry'], **kwargs)
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'numTry', 'logapiex'], **kwargs)
     servers = serverArgs.pop('servers', None)
     serverFile = serverArgs.pop('serverFile', None)
     numTry = serverArgs.pop('numTry', 1)
     resetTime = serverArgs.pop('resetTime', 5.0)
+    logapiex = serverArgs.pop('logapiex', True)
     lastTry = {}
     tryCnt = 0
     while tryCnt < numTry:
@@ -973,7 +974,8 @@ def DoOnServers(doer, *args, **kwargs):
             try:
                 return True, 200, doer(*args, **remArgs)
             except kclient.rest.ApiException as ex:
-                logger.info('Server found, but encounter API exception {0} {1} {2}'.format(ex, args, kwargs))
+                if logapiex:
+                    logger.info('Server found, but encounter API exception {0} {1} {2}'.format(ex, args, kwargs))
                 return True, ex.status, None
             except Exception as ex:
                 logger.warning('DoOnServers encounters exception {0} {1}'.format(type(ex), ex))
