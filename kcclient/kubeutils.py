@@ -1583,10 +1583,12 @@ class Cluster():
             kwargs.update({'servers': self.serversFixed})
         return DoOnServers(self.call_method_server, method, *args, **kwargs)
 
+    # convert is meaningless here, get_namespaced (used for custom object) returns raw dictionary anways to be consistent
+    # in other cases (pod, node, etc.) it is also not used
     def call_method_kubectl(self, method, *args, **kwargs):
         if method.endswith('_custom_object'):
             obj = "{0}.{1}".format(kwargs['plural'], kwargs['group'])
-            convert = kwargs.pop('convert', True) # may or may not want to convert, regular call_method returns raw dictionary (non-converted)
+            convert = kwargs.pop('convert', True) # convert not used
         elif method.endswith('_pod'):
             obj = "pod"
             convert = True # for consistency with non-kubectl call_method
