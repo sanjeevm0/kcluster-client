@@ -797,7 +797,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         #print(e)
         #raw = e['raw_object'] # accessible as map
         if isinstance(e['object'], dict):
-            obj = utils.ToClass(e['object'], True, KubeYamlIgnore)
+            obj = utils.ToClass(e['object'], convert, KubeYamlIgnore)
         else:
             obj = e['object']
         maxResVer = obj.metadata.resource_version
@@ -1586,14 +1586,19 @@ class Cluster():
     def call_method_kubectl(self, method, *args, **kwargs):
         if method.endswith('_custom_object'):
             obj = "{0}.{1}".format(kwargs['plural'], kwargs['group'])
+            convert = kwargs.pop('convert', True) # may or may not want to convert, regular call_method returns raw dictionary (non-converted)
         elif method.endswith('_pod'):
             obj = "pod"
+            convert = True # for consistency with non-kubectl call_method
         elif method.endswith("_service"):
             obj = "service"
+            convert = True
         elif method.endswith("_deployment"):
             obj = "deployment"
+            convert = True
         elif method.endswith("_stateful_set"):
             obj = "statefulset"
+            convert = True
         else:
             raise Exception("Not supported {0}".format(method))
 
@@ -1615,7 +1620,7 @@ class Cluster():
                 logger.info(cmdStr)
                 out = subprocess.check_output(cmdStr, shell=True)
                 if method.startswith("read_namespaced_"):
-                    out = utils.ToClass(yaml.safe_load(out), True, KubeYamlIgnore)
+                    out = utils.ToClass(yaml.safe_load(out), convert, KubeYamlIgnore)
                 else:
                     out = yaml.safe_load(out)
                 return True, 200, out
