@@ -808,7 +808,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         if isinstance(e['object'], dict):
             obj = utils.ToClass(e['object'], convert, KubeYamlIgnore)
             if not convert:
-                setattr(initobjs.metadata, 'resource_version', initobjs.metadata.resourceVersion)
+                setattr(e['object'].metadata, 'resource_version', e['object'].metadata.resourceVersion)
         else:
             obj = e['object']
         maxResVer = obj.metadata.resource_version
