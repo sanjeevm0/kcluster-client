@@ -737,6 +737,13 @@ def _getWatchCtx(lister, **kwargs):
         watcher = w.stream(lister, timeout_seconds=min(expireTime, ts), **kwargs)
     return w, watcher
 
+def getResourceVersion(obj):
+    if hasattr(obj.metadata, 'resource_version'):
+        return obj.metadata.resource_version
+    if hasattr(obj.metadata, 'resourceVersion'):
+        return obj.metadata.resourceVersion
+    raise Exception("No resource version found in object")
+
 def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
     #print("IN WATCH AND DO")
     doinit = thread.selfCtx.get('doinit', True)
@@ -754,6 +761,8 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
             initobjs = listerFn() # keep resource_version unset so that it starts from scratch
             if isinstance(initobjs, dict):
                 initobjs = utils.ToClass(initobjs, convert, KubeYamlIgnore)
+                if not convert: # can alternately use getResourceVersion instead of adding this
+                    setattr(initobjs.metadata, 'resource_version', initobjs.metadata.resourceVersion)
             maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
         except Exception as ex:
             logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
@@ -798,6 +807,8 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         #raw = e['raw_object'] # accessible as map
         if isinstance(e['object'], dict):
             obj = utils.ToClass(e['object'], convert, KubeYamlIgnore)
+            if not convert:
+                setattr(initobjs.metadata, 'resource_version', initobjs.metadata.resourceVersion)
         else:
             obj = e['object']
         maxResVer = obj.metadata.resource_version
@@ -1459,7 +1470,10 @@ class Cluster():
 
     def addTracker(self, name, watchMethod, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
         addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True, writeBackUpdates=False, 
-        timeout_seconds=0, stopMethod = lambda : False, sharedCtx = {}, **kwargs):
+        timeout_seconds=0, stopMethod = lambda : False, sharedCtx = None, **kwargs):
+
+        if sharedCtx is None:
+            sharedCtx = {}
  
         writeServerFile = (len(self.trackers)==0)
         t = self.tracker(sharedCtx, stopMethod, watchMethod, callback=None, writeServerFile=writeServerFile,
@@ -1621,7 +1635,7 @@ class Cluster():
                 logger.info(cmdStr)
                 out = subprocess.check_output(cmdStr, shell=True)
                 if method.startswith("read_namespaced_"):
-                    out = utils.ToClass(yaml.safe_load(out), convert, KubeYamlIgnore)
+                    out = utils.ToClass(yaml.safe_load(out), convert, KubeYamlIgnore) # convert will be False here
                 else:
                     out = yaml.safe_load(out)
                 return True, 200, out
