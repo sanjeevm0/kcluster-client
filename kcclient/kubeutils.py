@@ -741,7 +741,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     #print("IN WATCH AND DO")
     doinit = thread.selfCtx.get('doinit', True)
     maxResVer = thread.selfCtx.get('resource_version', None)
-    convert = thread.selfCtx.get('convert', True)
+    convert = thread.sharedCtx.get('convert', True)
     init = {}
     if doinit:
         if stopLoop is None:
@@ -1004,7 +1004,6 @@ def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, ap
     serverFile = serverArgs.pop('serverFile', None)
     writeServerFile = serverArgs.pop('writeServerFile', False)
     resetTime = serverArgs.pop('resetTime', 5.0) # resetTime defines how long to wait before server can be tried again, default 5.0
-    convert = serverArgs.pop('convert', True)
     lastTry = {}
     threadId = getThreadId()
     startTime = time.time()
