@@ -741,6 +741,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
     #print("IN WATCH AND DO")
     doinit = thread.selfCtx.get('doinit', True)
     maxResVer = thread.selfCtx.get('resource_version', None)
+    convert = thread.selfCtx.get('convert', True)
     init = {}
     if doinit:
         if stopLoop is None:
@@ -752,7 +753,7 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         try:
             initobjs = listerFn() # keep resource_version unset so that it starts from scratch
             if isinstance(initobjs, dict):
-                initobjs = utils.ToClass(initobjs, True, KubeYamlIgnore)
+                initobjs = utils.ToClass(initobjs, convert, KubeYamlIgnore)
             maxResVer = initobjs.metadata.resource_version # opaque value for the lister function
         except Exception as ex:
             logger.error('_watchAndDo encounters exception:\n {0} {1} {2}'.format(ex, listerFn, watcherFn))
@@ -998,11 +999,12 @@ def DoOnCluster(doer, **kwargs):
 
 # infinite watch across multiple api servers (until termination)
 def _watchObjOnACluster(_, threadName, sharedCtx, callback, stopLoop, lister, apiPodPrefix='kube-apiserver-', apiPodNs='kube-system', **kwargs):
-    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile', 'disconnect'], **kwargs)
+    serverArgs, remArgs = utils.kwargFilter(['servers', 'serverFile', 'resetTime', 'writeServerFile', 'disconnect', 'convert'], **kwargs)
     servers = copy.deepcopy(serverArgs.pop('servers', None))
     serverFile = serverArgs.pop('serverFile', None)
     writeServerFile = serverArgs.pop('writeServerFile', False)
     resetTime = serverArgs.pop('resetTime', 5.0) # resetTime defines how long to wait before server can be tried again, default 5.0
+    convert = serverArgs.pop('convert', True)
     lastTry = {}
     threadId = getThreadId()
     startTime = time.time()
@@ -1108,6 +1110,8 @@ class ObjTracker:
         self.started = False
         self.connected = True # connected unless told otherwise
         self.init = False
+        self.convert = kwargs.pop('convert', True)
+        self.sharedCtx['convert'] = self.convert
         self.lock = threading.RLock()
 
         # for standard callback, use setParams to set
@@ -1146,7 +1150,7 @@ class ObjTracker:
 
     def standardCallback(self, evType, obj, init, objPrev):
         process, deleted, objD = ObjTracker.ProcessObj(self.predicate, evType, obj, self.trackedObjs,
-            replacements=self.replacements, updateObj=self.updateObj, useUid=self.useUid)
+            replacements=self.replacements, updateObj=self.updateObj, useUid=self.useUid, convert=self.convert)
         if not process and evType!="none":
             return # no need to process, predicate not met
         if self.addlCallback is not None:
@@ -1157,12 +1161,12 @@ class ObjTracker:
     # A standard callback which keeps objects in "objs" by key (using toKey)
     # returns (processed, deleted) tuple
     @staticmethod
-    def ProcessObj(predicate, evType, obj, objs, replacements={}, updateObj=False, useUid=False):
+    def ProcessObj(predicate, evType, obj, objs, replacements={}, updateObj=False, useUid=False, convert=True):
         if obj is None:
             return False, False, None
 
         objO = copy.deepcopy(obj)
-        obj = ToYaml(obj, replacements) # replace _ip_ with _IP_ (e.g. for IP addresses)
+        obj = ToYaml(obj, replacements, convert=convert) # replace _ip_ with _IP_ (e.g. for IP addresses)
         if obj['kind']=="Pod":
             obj['running'] = podRunning(objO)
         if 'key' in obj:
@@ -2295,15 +2299,24 @@ def SetKubeYamlIgnore(ignore):
 def GetKubeYamlIgnore():
     return KubeYamlIgnore
 
-def ToYaml(obj, replacements={}, ignore=None):
+def ToYaml(obj, replacements={}, ignore=None, convert=True):
     if ignore is None:
         ignore = GetKubeYamlIgnore()
     if isinstance(obj, dict):
-        return utils.camelizeKeys(obj, False, replacements, ignore)
+        if convert:
+            return utils.camelizeKeys(obj, False, replacements, ignore)
+        else:
+            return copy.deepcopy(obj)
     elif type(obj)==utils.ToClass or str(type(obj))=="<class 'kcclient.utils.ToClass'>":
-        return obj.to_dict(True, replacements, ignore)
+        if convert:
+            return obj.to_dict(True, replacements, ignore)
+        else:
+            return obj.to_dict(False)
     else:
-        return utils.camelizeKeys(getSpecFromObj(obj), False, replacements, ignore)
+        if convert:
+            return utils.camelizeKeys(getSpecFromObj(obj), False, replacements, ignore)
+        else:
+            return copy.deepcopy(getSpecFromObj(obj))
 
 def ToKey(o):
     if type(o)==dict:
