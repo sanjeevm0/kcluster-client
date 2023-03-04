@@ -67,6 +67,8 @@ class ConditionsChecker():
         self.podLabels = {} # podKey -> set of labels for pod
         self.podsWithLabel = {} # label -> podKey -> True
         self.pods = {} # podKey -> pod
+        self.allLogWatchers = {} # for external callers to use
+        self.allStartWatchers = {}
         if getPods is None:
             self.podTracker = self.cluster.tracker({}, lambda : False, 'list_pod_for_all_namespaces',
                 callback=partial(ObjTracker.TryCb, self.onPodCb, self.lock), timeout_seconds=0)
@@ -87,7 +89,7 @@ class ConditionsChecker():
 
     def getPodSnapshot(self):
         with self.lock:
-            return copy.deepcopy(self.pods)
+            return copy.deepcopy(self.pods), copy.deepcopy(self.podsWithLabel)
 
     def ensureWatcher(self, pods, waitId, podKeyToWatch, contNameToWatch, startCondIndex, regex, logWatchers):
         if podKeyToWatch not in pods:
@@ -146,10 +148,6 @@ class ConditionsChecker():
                 # check if pod exists and if uid matches to make sure correct log is being checked
                 podKeyToWatch: str = w['key']
                 toDelete = False
-                if not toDelete and 'watch' in w and w['watch'].failed:
-                    logger.info("Pod {0} watcher failed - delete old watcher".format(podKeyToWatch))
-                    toDelete = True
-                    deleted = True
                 if not toDelete and podKeyToWatch not in pods:
                     logger.info("Pod {0} does not exist - delete old watcher".format(podKeyToWatch))
                     toDelete = True
@@ -158,12 +156,15 @@ class ConditionsChecker():
                     logger.info("Pod {0} has changed uid {1} -> {2} - delete old watcher".format(podKeyToWatch, uid, pods[podKeyToWatch]['metadata']['uid']))
                     toDelete = True
                     deleted = True
+                if 'watch' in w and w['watch'].failed:
+                    logger.info("Pod {0} watcher failed - delete old watcher".format(podKeyToWatch))
+                    toDelete = True # failed watcher, but valid pod still exists
                 if toDelete:
                     if 'watch' in w:
                         w['watch'].stop() # stop watcher if it exists
                     del watchersCond[contNameToWatch] # delete watcher
         #print(watchers)
-        return deleted      
+        return deleted
 
     def startConditionMet(self, pods, podsWithLabel, waitId, startCondIndex, start, startWatchers, logWatchers):
         podBeingWatchedDeleted = self.cleanAndCheckWatchers(pods, startCondIndex, startWatchers)
@@ -192,51 +193,74 @@ class ConditionsChecker():
                     self.ensureWatcher(pods, waitId, matchLog['podKey'], matchLog.get('contName', None),
                                        startCondIndex, matchLog['regex'], logWatchers)
 
-            if len(logWatchers)==0:
-                logger.info("WaitId {0} has no logwatchers".format(waitId))
-
+            logWatcherCount = 0
             for uid, watchers in logWatchers.get(str(startCondIndex), {}).items():
                 for contNameToWatch in list(watchers.keys()):
+                    logWatcherCount += 1
                     w = watchers[contNameToWatch]
                     if w['watch'].conditionMet:
                         return True, w['key'], podBeingWatchedDeleted
 
+            if logWatcherCount==0:
+                logger.info("WaitId {0} - startCondIndex {1} has no logwatchers".format(waitId, startCondIndex))
+
         return False, None, podBeingWatchedDeleted
+    
+    def initConditionChecker(self, waitId=None):
+        if waitId is None:
+            waitId = str(uuid.uuid4())
+        logger.info("Add condition checker with waitId {0}".format(waitId))
+        self.allLogWatchers[waitId] = {}
+        self.allStartWatchers[waitId] = {}
+        return waitId
+
+    # can be repeatedly called
+    def deleteConditionChecker(self, waitId):
+        logger.info("Delete condition checker with waitId {0}".format(waitId))
+        # stop the remaining logwatchers
+        for startCondIndex, allCondWatchers in self.allLogWatchers.get(waitId, {}).items(): # iterate over startCondIndex
+            for uid, watchers in allCondWatchers.items(): # iterate over uid of pod being watched
+                for contNameToWatch, watcher in watchers.items(): # iterate over contNameToWatch
+                    watcher['watch'].stop()
+
+        if waitId in self.allLogWatchers:
+            del self.allLogWatchers[waitId]
+        if waitId in self.allStartWatchers:
+            del self.allStartWatchers[waitId]
+
+    def conditionsMetChecker(self, startConditions, waitId, getPods, failOnPodRemoval=True):
+        pods, podsWithLabel = getPods()
+        podKeysCondition = {}
+        logWatchers = self.allLogWatchers[waitId]
+        startWatchers = self.allStartWatchers[waitId]
+        for startCondIndex, startCondition in enumerate(startConditions):
+            conditionMet, podKeyCondition, followedPodDeleted = self.startConditionMet(pods, podsWithLabel, waitId, startCondIndex, 
+                                                                                       startCondition, startWatchers, logWatchers)
+            if followedPodDeleted and failOnPodRemoval:
+                logger.info("WaitId {0} pod being followed for condition {1} was deleted".format(waitId, startCondIndex))
+                self.deleteConditionChecker(waitId)
+                return False, None
+            if not conditionMet:
+                return True, None # success, but conditions not yet met
+            podKeysCondition[podKeyCondition] = pods[podKeyCondition]['metadata']['uid']
+        self.deleteConditionChecker(waitId)
+        return True, podKeysCondition
 
     # synchronously wait for conditions to be met
     # failOnPodRemoval: if True, fail if pod being followed for condition meeting is removed
     # pollInterval: interval to poll for condition meeting
     def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2):
-        waitId = str(uuid.uuid4())
+        waitId = self.initConditionChecker()
         logger.info("WaitId: {0} - startConditions: {1}".format(waitId, startConditions))
-        logWatchers = {}
-        startWatchers = {}
-        success = True
         while True:
-            pods = self.getPodSnapshot()
-            podKeysCondition = {}
-            allConditionsMet = True
-            for i, startCondition in enumerate(startConditions):
-                conditionMet, podKeyCondition, followedPodDeleted = self.startConditionMet(pods, self.podsWithLabel, waitId, i, 
-                                                                                           startCondition, startWatchers, logWatchers)
-                if followedPodDeleted and failOnPodRemoval:
-                    success = False
-                    break
-                if not conditionMet:
-                    allConditionsMet = False
-                    break
-                else:
-                    podKeysCondition[podKeyCondition] = pods[podKeyCondition]['metadata']['uid']
-            if allConditionsMet or not success:
+            success, podKeysCondition = self.conditionsMetChecker(startConditions, waitId, self.getPods, failOnPodRemoval)
+            if not success:
+                break
+            if podKeysCondition is not None:
                 break
             time.sleep(pollInterval)
 
-        # stop the remaining logwatchers
-        for startCondIndex, allCondWatchers in logWatchers.items(): # iterate over startCondIndex
-            for uid, watchers in allCondWatchers.items(): # iterate over uid of pod being watched
-                for contNameToWatch, watcher in watchers.items(): # iterate over contNameToWatch
-                    watcher['watch'].stop()
-
+        self.deleteConditionChecker(waitId)
         # if podKeysCondition is being used to establish dependencies, caller should lock and check to make sure pods still exist
         return success, podKeysCondition
 
