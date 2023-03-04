@@ -2517,6 +2517,7 @@ class LogWatch():
         self.watcher = self.w.stream(method, namespace=namespace, name=podName, **kwargs)
         self.conditionMet = False
         self.stopped = False
+        self.failed = False
         t = threading.Thread(target=self.doWatch)
         t.daemon = True
         t.start()
@@ -2538,6 +2539,7 @@ class LogWatch():
                 logger.info("{0}/{1} iteration stops - pod terminated".format(self.namespace, self.podName))
             except Exception as ex:
                 keepGoing = False # thread terminates
+                self.failed = True
                 logger.error("{0}/{1} encounters exception {2}".format(self.namespace, self.podName, ex))
         try:
             self.w.stop()

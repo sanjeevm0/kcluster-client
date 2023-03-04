@@ -12,7 +12,7 @@ def mkdir(dir):
 
 loggers = {}
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2):
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2) -> logging.Logger:
     global logger
     if loggerName not in loggers:
         if loggerName is None:
