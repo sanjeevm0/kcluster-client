@@ -111,8 +111,8 @@ class ConditionsChecker():
         except Exception as ex:
             logger.error("EnsureWatcher encounters exception {0} {1}".format(ex, traceback.format_exc()))
 
-    def ensureAllLabelWatchers(self, pods, waitId, labelToWatch, contNameToWatch, startCondIndex, regex, logWatchers):
-        for podKeyToWatch, _ in self.podsWithLabel.get(labelToWatch, {}).items():
+    def ensureAllLabelWatchers(self, pods, podsWithLabel, waitId, labelToWatch, contNameToWatch, startCondIndex, regex, logWatchers):
+        for podKeyToWatch, _ in podsWithLabel.get(labelToWatch, {}).items():
             self.ensureWatcher(pods, waitId, podKeyToWatch, contNameToWatch, startCondIndex, regex, logWatchers)
 
     def checkStartTime(self, pods, podKeyToWatch, contNameToWatch, startCondIndex, waitTime, startWatchers):
@@ -165,14 +165,14 @@ class ConditionsChecker():
         #print(watchers)
         return deleted      
 
-    def startConditionMet(self, pods, waitId, startCondIndex, start, startWatchers, logWatchers):
+    def startConditionMet(self, pods, podsWithLabel, waitId, startCondIndex, start, startWatchers, logWatchers):
         podBeingWatchedDeleted = self.cleanAndCheckWatchers(pods, startCondIndex, startWatchers)
         podBeingWatchedDeleted = podBeingWatchedDeleted or self.cleanAndCheckWatchers(pods, startCondIndex, logWatchers)
 
         if 'after' in start:
             for after in start['after']: # array
                 if 'podLabel' in after:
-                    for podKeyToWatch, _ in self.podsWithLabel.get(after['podLabel'], {}).items():
+                    for podKeyToWatch, _ in podsWithLabel.get(after['podLabel'], {}).items():
                         if self.checkStartTime(pods, podKeyToWatch, after.get('contName', None), startCondIndex, after['wait'], startWatchers):
                             return True, podKeyToWatch, podBeingWatchedDeleted  
                 else:
@@ -186,7 +186,7 @@ class ConditionsChecker():
                 if 'regex' not in matchLog:
                     logger.warning("Skip {0} regex not present".format(matchLog))
                 if 'podLabel' in matchLog:
-                    self.ensureAllLabelWatchers(pods, waitId, matchLog['podLabel'], matchLog.get('contName', None), 
+                    self.ensureAllLabelWatchers(pods, podsWithLabel, waitId, matchLog['podLabel'], matchLog.get('contName', None), 
                                                 startCondIndex, matchLog['regex'], logWatchers)
                 else:
                     self.ensureWatcher(pods, waitId, matchLog['podKey'], matchLog.get('contName', None),
@@ -217,7 +217,8 @@ class ConditionsChecker():
             podKeysCondition = {}
             allConditionsMet = True
             for i, startCondition in enumerate(startConditions):
-                conditionMet, podKeyCondition, followedPodDeleted = self.startConditionMet(pods, waitId, i, startCondition, startWatchers, logWatchers)
+                conditionMet, podKeyCondition, followedPodDeleted = self.startConditionMet(pods, self.podsWithLabel, waitId, i, 
+                                                                                           startCondition, startWatchers, logWatchers)
                 if followedPodDeleted and failOnPodRemoval:
                     success = False
                     break
@@ -238,8 +239,8 @@ class ConditionsChecker():
 
         # if podKeysCondition is being used to establish dependencies, caller should lock and check to make sure pods still exist
         return success, podKeysCondition
-    
-if __name__=="__main__":
+
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     kubeutils.Cluster.addCmdArgs(parser)
@@ -263,3 +264,5 @@ if __name__=="__main__":
     logger.info(success)
     logger.info(podsUsed)
 
+if __name__=="__main__":
+    main()
