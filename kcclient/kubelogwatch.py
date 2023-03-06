@@ -209,9 +209,11 @@ class ConditionsChecker():
     def initConditionChecker(self, waitId=None):
         if waitId is None:
             waitId = str(uuid.uuid4())
-        logger.info("Add condition checker with waitId {0}".format(waitId))
-        self.allLogWatchers[waitId] = {}
-        self.allStartWatchers[waitId] = {}
+        if waitId not in self.allLogWatchers:
+            logger.info("Add condition checker with waitId {0}".format(waitId))
+            self.allLogWatchers[waitId] = {}
+        if waitId not in self.allStartWatchers:
+            self.allStartWatchers[waitId] = {}
         return waitId
 
     # can be repeatedly called
@@ -231,6 +233,8 @@ class ConditionsChecker():
     def conditionsMetChecker(self, startConditions, waitId, getPods, failOnPodRemoval=True):
         pods, podsWithLabel = getPods()
         podKeysCondition = {}
+        if waitId not in self.allLogWatchers or waitId not in self.allStartWatchers:
+            self.initConditionChecker(waitId)
         logWatchers = self.allLogWatchers[waitId]
         startWatchers = self.allStartWatchers[waitId]
         for startCondIndex, startCondition in enumerate(startConditions):
