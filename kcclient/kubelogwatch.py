@@ -253,9 +253,10 @@ class ConditionsChecker():
     # synchronously wait for conditions to be met
     # failOnPodRemoval: if True, fail if pod being followed for condition meeting is removed
     # pollInterval: interval to poll for condition meeting
-    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2):
+    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2, maxWait=None):
         waitId = self.initConditionChecker()
         logger.info("WaitId: {0} - startConditions: {1}".format(waitId, startConditions))
+        startTime = time.time()
         while True:
             success, podKeysCondition = self.conditionsMetChecker(startConditions, waitId, self.getPods, failOnPodRemoval)
             if not success:
@@ -263,6 +264,10 @@ class ConditionsChecker():
             if podKeysCondition is not None:
                 break
             time.sleep(pollInterval)
+            if maxWait is not None and time.time()-startTime > maxWait:
+                logger.info("WaitId {0} - maxWait {1} reached".format(waitId, maxWait))
+                success = False
+                break
 
         self.deleteConditionChecker(waitId)
         # if podKeysCondition is being used to establish dependencies, caller should lock and check to make sure pods still exist
