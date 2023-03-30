@@ -12,7 +12,7 @@ def mkdir(dir):
 
 loggers = {}
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2) -> logging.Logger:
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2, fmt=None, prtFmt=None) -> logging.Logger:
     global logger
     if loggerName not in loggers:
         if loggerName is None:
@@ -27,9 +27,17 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
         else:
             logfh = logging.handlers.RotatingFileHandler(filename, mode=mode, maxBytes=10*1024*1024, backupCount=backupCount)
         logfh.setLevel(level)
+        if fmt is not None:
+            if isinstance(fmt, str):
+                fmt = logging.Formatter(fmt) # e.g. logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            logfh.setFormatter(fmt)
         logger.addHandler(logfh)
         logprt = logging.StreamHandler(sys.stdout)
         logprt.setLevel(prtLogLevel)
+        if prtFmt is not None:
+            if isinstance(prtFmt, str):
+                prtFmt = logging.Formatter(prtFmt)
+            logprt.setFormatter(prtFmt)
         logger.addHandler(logprt)
         loggers[loggerName] = logger
     return loggers[loggerName]
