@@ -11,6 +11,7 @@ def mkdir(dir):
     path.mkdir(parents=True, exist_ok=True)
 
 loggers = {}
+logger = None
 
 def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2,
               fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False) -> logging.Logger:
