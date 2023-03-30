@@ -13,22 +13,16 @@ def mkdir(dir):
 loggers = {}
 logger = None
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2,
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName="logcommon-d3ab1c", backupCount=2,
               fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False) -> logging.Logger:
     global logger
-    if overwrite:
-        if loggerName in loggers:
-            for hndl in loggers[loggerName].handlers:
-                hndl.close()
-                loggers[loggerName].removeHandler(hndl)
-            del loggers[loggerName]
-    if loggerName not in loggers:
-        if loggerName is None:
-            logger = logging.getLogger() # get root logger
-        else:
-            logger = logging.getLogger(loggerName)
-        #print("Level: {0}".format(level))
-        logger.setLevel(level)
+    if loggerName not in loggers or overwrite:
+        logger = logging.getLogger(loggerName)
+        for handler in logger.handlers: # if overwrite, remove old handlers
+            handler.close()
+            logger.removeHandler(handler)
+        #logger.propagate = False # optional since not using root logger
+        logger.setLevel(min(level, prtLogLevel))
         mkdir(path.dirname(filename))
         if backupCount < 0:
             logfh = logging.FileHandler(filename, mode=mode)
