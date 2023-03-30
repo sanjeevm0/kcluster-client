@@ -12,8 +12,14 @@ def mkdir(dir):
 
 loggers = {}
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2, fmt=None, prtFmt=None) -> logging.Logger:
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2, fmt=None, prtFmt=None, overwrite=False) -> logging.Logger:
     global logger
+    if overwrite:
+        if loggerName in loggers:
+            for hndl in loggers[loggerName].handlers:
+                hndl.close()
+                loggers[loggerName].removeHandler(hndl)
+            del loggers[loggerName]
     if loggerName not in loggers:
         if loggerName is None:
             logger = logging.getLogger() # get root logger
