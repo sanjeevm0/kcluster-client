@@ -12,7 +12,8 @@ def mkdir(dir):
 
 loggers = {}
 
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2, fmt=None, prtFmt=None, overwrite=False) -> logging.Logger:
+def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName=None, backupCount=2,
+              fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False) -> logging.Logger:
     global logger
     if overwrite:
         if loggerName in loggers:
@@ -31,7 +32,11 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
         if backupCount < 0:
             logfh = logging.FileHandler(filename, mode=mode)
         else:
-            logfh = logging.handlers.RotatingFileHandler(filename, mode=mode, maxBytes=10*1024*1024, backupCount=backupCount)
+            # use mode='a' to rollover on start, otherwise 'w' would overwrite the file without rolling over
+            # maxBytes=10*1024*1024, backupCount=2, use maxBytes=0 to grow without limit
+            logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount)
+            if mode == 'w':
+                logfh.doRollover()
         logfh.setLevel(level)
         if fmt is not None:
             if isinstance(fmt, str):
