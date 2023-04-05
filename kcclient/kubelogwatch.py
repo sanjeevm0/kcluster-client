@@ -259,7 +259,8 @@ class ConditionsChecker():
     # synchronously wait for conditions to be met
     # failOnPodRemoval: if True, fail if pod being followed for condition meeting is removed
     # pollInterval: interval to poll for condition meeting
-    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2, maxWait=None, waitId=None):
+    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2, maxWait=None,
+                           waitId=None, toStopFn=None):
         waitId = self.initConditionChecker(waitId)
         logger.info("WaitId: {0} - startConditions: {1}".format(waitId, startConditions))
         startTime = time.time()
@@ -268,13 +269,13 @@ class ConditionsChecker():
             if not success:
                 break
             if podKeysCondition is not None:
-                break
+                break # success
             time.sleep(pollInterval)
             if maxWait is not None and time.time()-startTime > maxWait:
                 logger.info("WaitId {0} - maxWait {1} reached".format(waitId, maxWait))
                 success = False
                 break
-            if self.stop.get(waitId, False):
+            if self.stop.get(waitId, False) or (toStopFn is not None and toStopFn()):
                 logger.info("WaitId {0} - stop requested".format(waitId))
                 success = False
                 break
