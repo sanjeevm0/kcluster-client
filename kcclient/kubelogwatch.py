@@ -69,6 +69,7 @@ class ConditionsChecker():
         self.pods = {} # podKey -> pod
         self.allLogWatchers = {} # for external callers to use
         self.allStartWatchers = {}
+        self.stop = {}
         if getPods is None:
             self.podTracker = self.cluster.tracker({}, lambda : False, 'list_pod_for_all_namespaces',
                 callback=partial(ObjTracker.TryCb, self.onPodCb, self.lock), timeout_seconds=0)
@@ -229,6 +230,8 @@ class ConditionsChecker():
             del self.allLogWatchers[waitId]
         if waitId in self.allStartWatchers:
             del self.allStartWatchers[waitId]
+        if waitId in self.stop:
+            del self.stop[waitId]
 
     def conditionsMetChecker(self, startConditions, waitId, getPods, failOnPodRemoval=True):
         pods, podsWithLabel = getPods()
@@ -250,11 +253,14 @@ class ConditionsChecker():
         self.deleteConditionChecker(waitId)
         return True, podKeysCondition
 
+    def stopWait(self, waitId):
+        self.stop[waitId] = True
+
     # synchronously wait for conditions to be met
     # failOnPodRemoval: if True, fail if pod being followed for condition meeting is removed
     # pollInterval: interval to poll for condition meeting
-    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2, maxWait=None):
-        waitId = self.initConditionChecker()
+    def waitConditionsSync(self, startConditions, failOnPodRemoval=True, pollInterval=2, maxWait=None, waitId=None):
+        waitId = self.initConditionChecker(waitId)
         logger.info("WaitId: {0} - startConditions: {1}".format(waitId, startConditions))
         startTime = time.time()
         while True:
@@ -266,6 +272,10 @@ class ConditionsChecker():
             time.sleep(pollInterval)
             if maxWait is not None and time.time()-startTime > maxWait:
                 logger.info("WaitId {0} - maxWait {1} reached".format(waitId, maxWait))
+                success = False
+                break
+            if self.stop.get(waitId, False):
+                logger.info("WaitId {0} - stop requested".format(waitId))
                 success = False
                 break
 
