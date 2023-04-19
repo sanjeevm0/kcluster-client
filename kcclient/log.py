@@ -14,7 +14,7 @@ loggers = {}
 logger = None
 
 def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName="logcommon-d3ab1c", backupCount=2,
-              fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False) -> logging.Logger:
+              fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False, encoding='utf-8') -> logging.Logger:
     global logger
     if loggerName not in loggers or overwrite:
         logger = logging.getLogger(loggerName)
@@ -25,11 +25,11 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
         logger.setLevel(min(level, prtLogLevel))
         mkdir(path.dirname(filename))
         if backupCount < 0:
-            logfh = logging.FileHandler(filename, mode=mode)
+            logfh = logging.FileHandler(filename, mode=mode, encoding=encoding)
         else:
             # use mode='a' to rollover on start, otherwise 'w' would overwrite the file without rolling over
             # maxBytes=10*1024*1024, backupCount=2, use maxBytes=0 to grow without limit
-            logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount)
+            logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding)
             if mode == 'w':
                 logfh.doRollover()
         logfh.setLevel(level)
