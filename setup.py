@@ -20,5 +20,7 @@ setup(
     author_email='sanjeevm@microsoft.com',
     license='MIT',
     packages=['kcclient'],
+    package_data={'': ['*.json']},
+    include_package_data=True,
     install_requires=requirements
 )
