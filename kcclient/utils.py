@@ -15,6 +15,7 @@ import base64
 import hashlib
 import sys
 from datetime import datetime
+import importlib.resources
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 
@@ -575,15 +576,25 @@ def genCert(baseca, base, cn, hostnames, o, size=2048):
                   format(cacrt, cakey, config, hoststr, csrFile, base))
 
 def genCert2(baseca, base, cn, hostnames, o, size=2048):
+    basedir = os.path.dirname(base)
     cacrt = baseca + ".pem"
     cakey = baseca + "-key.pem"
-    config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
+    try:
+        config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
+    except Exception:
+        configJ = importlib.resources.read_text("kcclient", "ca-config.json")
+        with open("{0}/ca-config.json".format(basedir), "w", encoding='utf-8') as f:
+            f.write(configJ)
     crt = base + ".pem"
     key = base + "-key.pem"
     csrFile = base + ".csr.json"
-    basedir = os.path.dirname(base)
     os.system("mkdir -p {0}".format(basedir))
-    render_template("{0}/../ssh_tls/csr.json.template".format(thisPath), csrFile, {"cn": cn, "size": size, "o": o})
+    csrTemplate = "{0}/../ssh_tls/csr.json.template".format(thisPath)
+    if not os.path.exists(csrTemplate):
+        csrTemplate = "{0}/csr.json.template".format(basedir)
+        with open(csrTemplate, "w", encoding='utf-8') as f:
+            f.write(importlib.resources.read_text("kcclient", "csr.json.template"))
+    render_template(csrTemplate, csrFile, {"cn": cn, "size": size, "o": o})
     if not os.path.exists(crt) or not os.path.exists(key):
         if hostnames is not None:
             hoststr = "-hostname='{0}'".format(",".join(hostnames))

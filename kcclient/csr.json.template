@@ -1,0 +1,16 @@
+{
+    "CN": "{{cnf["cn"]}}",
+    "key": {
+      "algo": "rsa",
+      "size": {{cnf["size"]}}
+    },
+    "names": [
+        {
+            "C": "US",
+            "L": "Redmond",
+            "O": "{{cnf["o"]}}",
+            "ST": "Washington",
+            "OU": "CA"
+        }
+    ]
+}
