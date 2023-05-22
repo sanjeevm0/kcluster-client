@@ -575,10 +575,8 @@ def genCert(baseca, base, cn, hostnames, o, size=2048):
                   "-profile=default {3} {4} | cfssljson -bare {5}".
                   format(cacrt, cakey, config, hoststr, csrFile, base))
 
-def genCert2(baseca, base, cn, hostnames, o, size=2048):
+def genCert2(cacrt, cakey, base, cn, hostnames, o, size=2048):
     basedir = os.path.dirname(base)
-    cacrt = baseca + ".pem"
-    cakey = baseca + "-key.pem"
     try:
         config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
     except Exception:
@@ -604,11 +602,16 @@ def genCert2(baseca, base, cn, hostnames, o, size=2048):
                   "-profile=default {3} {4} | cfssljson -bare {5}".
                   format(cacrt, cakey, config, hoststr, csrFile, base))
 
-def getCert(baseca, cn, hostnames, o, size=2048):
+def getCert(baseca, cn, hostnames, o, size=2048, cakey=None):
     tmpdir = tempfile.mkdtemp()
-    genCert2(baseca, '{0}/cert'.format(tmpdir), cn, hostnames, o, size)
+    if cakey is None:
+        cacrt = baseca + ".pem"
+        cakey = baseca + "-key.pem"
+    else:
+        cacrt = baseca
+    genCert2(cacrt, cakey, '{0}/cert'.format(tmpdir), cn, hostnames, o, size)
     certs = {}
-    with open('{0}.pem'.format(baseca)) as fp:
+    with open(cacrt) as fp:
         certs['CA'] = fp.read()
     with open('{0}/cert.pem'.format(tmpdir), 'r') as fp:
         certs['Cert'] = fp.read()
