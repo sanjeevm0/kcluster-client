@@ -1333,6 +1333,9 @@ class ObjTracker:
                 return wt
         return None
 
+def defKubeConfig():
+    return os.path.join(os.environ['HOME'], '.kube', 'config')
+
 # Supports token (e.g. service token, and TLS certs for auth)
 class Cluster():
     def __init__(self, name=None, api_key=None, base=None, ca=None, cert=None, key=None, servers=None, serverFile=None,
@@ -1373,7 +1376,9 @@ class Cluster():
         self.useKubectl = useKubectl    
 
     @staticmethod
-    def getContext(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), name=None):
+    def getContext(kubeconfig=None, name=None):
+        if kubeconfig is None:
+            kubeconfig = defKubeConfig()
         config = utils.loadYaml(kubeconfig)
         if name is None:
             name = config['current-context']
@@ -1384,7 +1389,9 @@ class Cluster():
             return match[0]
         
     @staticmethod
-    def getCluster(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), clusterName=None):
+    def getCluster(kubeconfig=None, clusterName=None):
+        if kubeconfig is None:
+            kubeconfig = defKubeConfig()
         config = utils.loadYaml(kubeconfig)
         if clusterName is None:
             clusterName = Cluster.getContext(kubeconfig)['context']['cluster']
@@ -1395,7 +1402,9 @@ class Cluster():
             return match[0]
         
     @staticmethod
-    def getUser(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), userName=None):
+    def getUser(kubeconfig=None, userName=None):
+        if kubeconfig is None:
+            kubeconfig = defKubeConfig()
         config = utils.loadYaml(kubeconfig)
         if userName is None:
             userName = Cluster.getContext(kubeconfig)['context']['user']
@@ -1414,7 +1423,7 @@ class Cluster():
 
     @staticmethod
     def defCluster():
-        kubeconfig = os.path.join(os.environ['HOME'], '.kube', 'config')
+        kubeconfig = defKubeConfig()
         config = utils.loadYaml(kubeconfig)
         defConfig = [v for v in config['contexts'] if v['name']==config['current-context']][0]
         return Cluster(kubeconfig=kubeconfig, name=defConfig['context']['cluster'], kubeconfiguser=defConfig['context']['user'])
