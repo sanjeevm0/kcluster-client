@@ -581,7 +581,8 @@ def genCert2(cacrt, cakey, base, cn, hostnames, o, size=2048):
         config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
     except Exception:
         configJ = importlib.resources.read_text("kcclient", "ca-config.json")
-        with open("{0}/ca-config.json".format(basedir), "w", encoding='utf-8') as f:
+        config = "{0}/ca-config.json".format(basedir)
+        with open(config, "w", encoding='utf-8') as f:
             f.write(configJ)
     crt = base + ".pem"
     key = base + "-key.pem"
