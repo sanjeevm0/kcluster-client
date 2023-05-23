@@ -577,13 +577,11 @@ def genCert(baseca, base, cn, hostnames, o, size=2048):
 
 def genCert2(cacrt, cakey, base, cn, hostnames, o, size=2048):
     basedir = os.path.dirname(base)
-    try:
-        config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
-    except Exception:
-        configJ = importlib.resources.read_text("kcclient", "ca-config.json")
+    config = "{0}/../ssh_tls/ca-config.json".format(thisPath)
+    if not os.path.exists(config):
         config = "{0}/ca-config.json".format(basedir)
         with open(config, "w", encoding='utf-8') as f:
-            f.write(configJ)
+            f.write(importlib.resources.read_text("kcclient", "ca-config.json"))
     crt = base + ".pem"
     key = base + "-key.pem"
     csrFile = base + ".csr.json"
