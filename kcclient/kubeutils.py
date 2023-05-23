@@ -1373,6 +1373,39 @@ class Cluster():
         self.useKubectl = useKubectl    
 
     @staticmethod
+    def getContext(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), name=None):
+        config = utils.loadYaml(kubeconfig)
+        if name is None:
+            name = config['current-context']
+        match = [v for v in config['contexts'] if v['name'] == name]
+        if len(match) == 0:
+            return None
+        else:
+            return match[0]
+        
+    @staticmethod
+    def getCluster(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), clusterName=None):
+        config = utils.loadYaml(kubeconfig)
+        if clusterName is None:
+            clusterName = Cluster.getContext(kubeconfig)['context']['cluster']
+        match = [v for v in config['clusters'] if v['name'] == clusterName]
+        if len(match) == 0:
+            return None
+        else:
+            return match[0]
+        
+    @staticmethod
+    def getUser(kubeconfig=os.path.join(os.environ['HOME'], '.kube', 'config'), userName=None):
+        config = utils.loadYaml(kubeconfig)
+        if userName is None:
+            userName = Cluster.getContext(kubeconfig)['context']['user']
+        match = [v for v in config['users'] if v['name'] == userName]
+        if len(match) == 0:
+            return None
+        else:
+            return match[0]
+
+    @staticmethod
     def addCmdArgs(parser):
         parser.add_argument('--aksname', '-aksname', nargs='+', default=None, required=False, help="AKS cluster of form: <resourceGroup> <clusterName>")
         parser.add_argument('--kcfg', '-kcfg', nargs='+', default=None, required=False, help="Kube config cluster of form: <kubeConfigFile> <clusterName> <clusterUser>")
