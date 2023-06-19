@@ -15,7 +15,12 @@ import base64
 import hashlib
 import sys
 from datetime import datetime
-import importlib.resources
+try:
+    import importlib.resources
+    importlibmodule = importlib.resources
+except Exception:
+    import importlib_resources
+    importlibmodule = importlib_resources
 thisPath = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(thisPath)
 
@@ -581,7 +586,7 @@ def genCert2(cacrt, cakey, base, cn, hostnames, o, size=2048):
     if not os.path.exists(config):
         config = "{0}/ca-config.json".format(basedir)
         with open(config, "w", encoding='utf-8') as f:
-            f.write(importlib.resources.read_text("kcclient", "ca-config.json"))
+            f.write(importlibmodule.read_text("kcclient", "ca-config.json"))
     crt = base + ".pem"
     key = base + "-key.pem"
     csrFile = base + ".csr.json"
@@ -590,7 +595,7 @@ def genCert2(cacrt, cakey, base, cn, hostnames, o, size=2048):
     if not os.path.exists(csrTemplate):
         csrTemplate = "{0}/csr.json.template".format(basedir)
         with open(csrTemplate, "w", encoding='utf-8') as f:
-            f.write(importlib.resources.read_text("kcclient", "csr.json.template"))
+            f.write(importlibmodule.read_text("kcclient", "csr.json.template"))
     render_template(csrTemplate, csrFile, {"cn": cn, "size": size, "o": o})
     if not os.path.exists(crt) or not os.path.exists(key):
         if hostnames is not None:
