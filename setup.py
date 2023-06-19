@@ -22,5 +22,8 @@ setup(
     packages=['kcclient'],
     package_data={'': ['*.json', '*.template']},
     include_package_data=True,
-    install_requires=requirements
+    install_requires=requirements,
+    extras_require={
+        'python_version < "3.7"': ['importlib-resources']
+    }
 )
