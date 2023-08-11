@@ -389,7 +389,7 @@ def diffList(x1, x2, ignoreOrder=True):
                     found = True
                     break
             # try to match index
-            if not found and len(x2) >= j and subDiffA[j][j] is not None and not used[j]:
+            if not found and len(x2) >= (j+1) and subDiffA[j][j] is not None and not used[j]:
                 diffs.append(subDiffA[j][j])
                 found = True
                 used[j] = True
