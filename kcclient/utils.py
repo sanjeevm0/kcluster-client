@@ -388,10 +388,11 @@ def diffList(x1, x2, ignoreOrder=True):
                     used[i] = True
                     found = True
                     break
-            if not found and subDiffA[j][i] is not None and not used[i]:
-                diffs.append(subDiffA[j][i])
+            # try to match index
+            if not found and len(x2) >= j and subDiffA[j][j] is not None and not used[j]:
+                diffs.append(subDiffA[j][j])
                 found = True
-                used[i] = True
+                used[j] = True
             if not found:
                 diffs.append(x11)
         for i, x21 in enumerate(x2):
