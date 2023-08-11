@@ -352,25 +352,51 @@ def diffList(x1, x2, ignoreOrder=True):
         else:
             diffs.extend(x2[len(x1):])
     else:
-        x2C = copy.deepcopy(x2)
+        foundA = []
+        subDiffA = []
+        # array of length x2 with False
+        used = [False for i in range(len(x2))]
         for j, x11 in enumerate(x1):
             found = False
-            for i, x21 in enumerate(x2C):
+            subDiffB = [None for i in range(len(x2))]
+            for i, x21 in enumerate(x2):
+                if used[i]:
+                    continue
                 if x11 == x21:
                     found = True
-                    x2C.pop(i)
+                    used[i] = True
                     break
                 (same, subDiff) = diff(x11, x21, ignoreOrder)
                 if same:
                     found = True
-                    x2C.pop(i)
+                    used[i] = True
                     break
-                if j==i:
-                    subDiffJ = subDiff
+                subDiffB[i] = subDiff
+            foundA.append(found)
+            subDiffA.append(subDiffB)
+        for j, x11 in enumerate(x1):
+            if foundA[j]:
+                continue
+            found = False
+            for i, subDiff in enumerate(subDiffA[j]):
+                if used[i]:
+                    continue
+                if (isinstance(x11, dict) and isinstance(x2[i], dict) and
+                    'name' in x11 and 'name' in x2[i] and x11['name']==x2[i]['name']):
+                    subDiff.update({'name': x11['name']})
+                    diffs.append(subDiff)
+                    used[i] = True
+                    found = True
+                    break
+            if not found and subDiffA[j][i] is not None and not used[i]:
+                diffs.append(subDiffA[j][i])
+                found = True
+                used[i] = True
             if not found:
-                diffs.append(subDiffJ)
-                x2C.pop(j)
-        diffs.extend(x2C) # whatever is leftover and unused
+                diffs.append(x11)
+        for i, x21 in enumerate(x2):
+            if not used[i]:
+                diffs.append(x21)
 
     if len(diffs) > 0:
         return False, diffs
