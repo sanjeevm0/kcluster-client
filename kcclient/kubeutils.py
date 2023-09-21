@@ -1650,10 +1650,10 @@ class Cluster():
         elif method.endswith("_service"):
             obj = "service"
             convert = True
-        elif method.endswith("_deployment"):
+        elif method.endswith("_deployment") or method.endswith("_deployment_scale"):
             obj = "deployment"
             convert = True
-        elif method.endswith("_stateful_set"):
+        elif method.endswith("_stateful_set") or method.endswith("_stateful_set_scale"):
             obj = "statefulset"
             convert = True
         else:
