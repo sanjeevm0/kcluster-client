@@ -335,8 +335,116 @@ def cmp(key, x1, x2):
         return isinstance(x1[key], dict)
     else:
         return True # not in either
+    
+# convert list to dict using keyToUse
+def listToDict(x, keyToUse='name'):
+    if isinstance(x, list):
+        d = {}
+        for i in x:
+            if not isinstance(i, dict):
+                return x # return original list
+            if keyToUse in i and i[keyToUse] not in d:
+                d[i[keyToUse]] = i
+            else:
+                return x # return original list
+        return d
+    else:
+        return x
 
-def diffList(x1, x2, ignoreOrder=True):
+def dictToList(x, skipEmpty=True, keyToUse='name'):
+    if isinstance(x, dict):
+        l = []
+        for k, v in x.items():
+            if skipEmpty and (v is None or v=={}):
+                continue
+            if isinstance(v, dict):
+                c = copy.deepcopy(v)
+                v.update({keyToUse: k})
+                l.append(v)
+            else:
+                return x # return original dict
+        return l
+    else:
+        return x
+    
+# returns a - b & "full diff"
+def diffA(a, b, keyToUse='name'):
+    if not isinstance(a, type(b)):
+        return {'__add__': a, '__del__': b}, {'__add__': a, '__del__': b}
+    aD = listToDict(a, keyToUse)
+    bD = listToDict(b, keyToUse)
+    isList = isinstance(a, list)
+    if not isinstance(aD, dict):
+        if a==b:
+            return None, None
+        else:
+            return {'__add__': a, '__del__': b}, {'__add__': a, '__del__': b}
+    else: # either dict to begin with or convertible
+        dPart = {}
+        dFull = {}
+        keys = set(aD.keys())
+        keys.update(bD.keys())
+        for k in keys:
+            diffP , diffF = diffA(aD.get(k, None), bD.get(k, None), keyToUse)
+            #print("k: {0}, diff: {1} diffulll: {2}".format(k, diffP, diffF))
+            if diffP is None:
+                continue
+            dFull[k] = diffF
+            if '__add__' in diffP and diffP['__add__'] is not None:
+                dPart[k] = diffP['__add__']
+            elif '__del__' in diffP and diffP['__del__'] is not None:
+                dPart[k] = {'__del__': diffP['__del__']}
+                # if isinstance(diffP['__del__'], dict):
+                #     dPart[k] = diffP['__del__']
+                #     dPart[k].update({'__del__': True})
+                # else:
+                #     dPart[k] = {'__del__': diffP['__del__']}
+            else:
+                dPart[k] = diffP
+        #print(dPart)
+        #print(dFull)
+        if len(dPart)==0:
+            dPart = None
+        if len(dFull)==0:
+            dFull = None
+        if isList:
+            return dictToList(dPart, True, keyToUse), dictToList(dFull, True, keyToUse)
+        else:
+            return dPart, dFull
+        
+# if c = a-b, a = b+c
+# b is original, c is "patch"
+def patchA(b, c, keyToUse='name'):
+    if c is None:
+        return b
+    cD = listToDict(c, keyToUse)
+    if not isinstance(cD, dict):
+        return c
+    if '__add__' in cD:
+        return c['__add__']
+    if '__del__' in cD:
+        return None
+    isList = isinstance(b, list)
+    bD = listToDict(b, keyToUse)
+    if bD is None:
+        bD = {}
+    if not isinstance(bD, dict):
+        #print("b: {0}, c: {1}".format(b, c))
+        raise ValueError("Invalid patch")
+    keys = set(bD.keys())
+    keys.update(cD.keys())
+    n = {}
+    for k in keys:
+        patched = patchA(bD.get(k, None), cD.get(k, None), keyToUse)
+        #print("k: {0}, patched: {1}".format(k, patched))
+        if patched is not None:
+            n[k] = patched
+    if isList:
+        return dictToList(n, True, keyToUse)
+    else:    
+        return n
+
+def diffList(x1, x2, ignoreOrder=True, keyToUse='name'):
     if x1==x2:
         return True, None
 
@@ -382,8 +490,8 @@ def diffList(x1, x2, ignoreOrder=True):
                 if used[i]:
                     continue
                 if (isinstance(x11, dict) and isinstance(x2[i], dict) and
-                    'name' in x11 and 'name' in x2[i] and x11['name']==x2[i]['name']):
-                    subDiff.update({'name': x11['name']})
+                    keyToUse in x11 and keyToUse in x2[i] and x11[keyToUse]==x2[i][keyToUse]):
+                    subDiff.update({keyToUse: x11[keyToUse]})
                     diffs.append(subDiff)
                     used[i] = True
                     found = True
@@ -421,12 +529,12 @@ def diffDict(x1, x2, ignoreOrder=True):
     else:
         return True, None
 
-def diff(x1, x2, ignoreOrder=True):
+def diff(x1, x2, ignoreOrder=True, keyToUse='name'):
     # if type(x1) != type(x2):
     #     return False, x1
 
     if isinstance(x1, list) and isinstance(x2, list):
-        return diffList(x1, x2, ignoreOrder)
+        return diffList(x1, x2, ignoreOrder, keyToUse)
 
     if isinstance(x1, dict) and isinstance(x2, dict):
         return diffDict(x1, x2, ignoreOrder)
