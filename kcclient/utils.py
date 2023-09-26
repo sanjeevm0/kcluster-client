@@ -367,10 +367,17 @@ def dictToList(x, skipEmpty=True, keyToUse='name'):
     else:
         return x
     
+def getNodDictDiff(a, b):
+    dFull = {'__add__': a, '__del__': b}
+    if a is None:
+        return {'__del__': b}, dFull
+    else:
+        return a, dFull
+    
 # returns a - b & "full diff"
 def diffA(a, b, keyToUse='name'):
     if not isinstance(a, type(b)):
-        return {'__add__': a, '__del__': b}, {'__add__': a, '__del__': b}
+        return getNodDictDiff(a, b)
     aD = listToDict(a, keyToUse)
     bD = listToDict(b, keyToUse)
     isList = isinstance(a, list)
@@ -378,7 +385,7 @@ def diffA(a, b, keyToUse='name'):
         if a==b:
             return None, None
         else:
-            return {'__add__': a, '__del__': b}, {'__add__': a, '__del__': b}
+            return getNodDictDiff(a, b)
     else: # either dict to begin with or convertible
         dPart = {}
         dFull = {}
@@ -390,7 +397,9 @@ def diffA(a, b, keyToUse='name'):
             if diffP is None:
                 continue
             dFull[k] = diffF
-            if '__add__' in diffP and diffP['__add__'] is not None:
+            if not isinstance(diffP, dict):
+                dPart[k] = diffP
+            elif '__add__' in diffP and diffP['__add__'] is not None:
                 dPart[k] = diffP['__add__']
             elif '__del__' in diffP and diffP['__del__'] is not None:
                 dPart[k] = {'__del__': diffP['__del__']}
