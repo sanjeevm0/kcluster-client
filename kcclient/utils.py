@@ -381,7 +381,7 @@ def diffA(a, b, keyToUse='name'):
     aD = listToDict(a, keyToUse)
     bD = listToDict(b, keyToUse)
     isList = isinstance(a, list)
-    if not isinstance(aD, dict):
+    if not isinstance(aD, dict) or not isinstance(bD, dict):
         if a==b:
             return None, None
         else:
@@ -438,8 +438,9 @@ def patchA(b, c, keyToUse='name'):
     if bD is None:
         bD = {}
     if not isinstance(bD, dict):
+        return c
         #print("b: {0}, c: {1}".format(b, c))
-        raise ValueError("Invalid patch")
+        #raise ValueError("Invalid patch")
     keys = set(bD.keys())
     keys.update(cD.keys())
     n = {}
