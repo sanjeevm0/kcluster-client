@@ -335,7 +335,7 @@ def cmp(key, x1, x2):
         return isinstance(x1[key], dict)
     else:
         return True # not in either
-    
+
 # convert list to dict using keyToUse
 def listToDict(x, keyToUse='name'):
     if isinstance(x, list):
@@ -366,18 +366,18 @@ def dictToList(x, skipEmpty=True, keyToUse='name'):
         return l
     else:
         return x
-    
-def getNodDictDiff(a, b):
+
+def getNonDictDiff(a, b):
     dFull = {'__add__': a, '__del__': b}
     if a is None:
         return {'__del__': b}, dFull
     else:
         return a, dFull
-    
+
 # returns a - b & "full diff"
 def diffA(a, b, keyToUse='name'):
     if not isinstance(a, type(b)):
-        return getNodDictDiff(a, b)
+        return getNonDictDiff(a, b)
     aD = listToDict(a, keyToUse)
     bD = listToDict(b, keyToUse)
     isList = isinstance(a, list)
@@ -385,7 +385,7 @@ def diffA(a, b, keyToUse='name'):
         if a==b:
             return None, None
         else:
-            return getNodDictDiff(a, b)
+            return getNonDictDiff(a, b)
     else: # either dict to begin with or convertible
         dPart = {}
         dFull = {}
@@ -420,7 +420,7 @@ def diffA(a, b, keyToUse='name'):
             return dictToList(dPart, True, keyToUse), dictToList(dFull, True, keyToUse)
         else:
             return dPart, dFull
-        
+
 # if c = a-b, a = b+c
 # b is original, c is "patch"
 def patchA(b, c, keyToUse='name'):
