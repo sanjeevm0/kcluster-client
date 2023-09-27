@@ -215,8 +215,37 @@ class OIDCLogin():
 
     # ===============================
     # Token validation
+    MSFTKeys = {}
+    AllMSFTKeys = None
+    @staticmethod
+    def getMSFTKey(token):
+        token_header = jwt.get_unverified_header(token)
+        if token_header['kid'] in OIDCLogin.MSFTKeys:
+            return OIDCLogin.MSFTKeys[token_header['kid']]
+        else:
+            if OIDCLogin.AllMSFTKeys is None:
+                res = requests.get("https://login.microsoftonline.com/common/discovery/v2.0/keys")
+                OIDCLogin.AllMSFTKeys = res.json()
+            x5c = None
+            for key in OIDCLogin.AllMSFTKeys['keys']:
+                if key['kid'] == token_header['kid']:
+                    x5c = key['x5c']
+                    break
+            if x5c is None:
+                return None
+            # Create cert
+            try:
+                from cryptography.x509 import load_pem_x509_certificate
+                from cryptography.hazmat.backends import default_backend
+                cert = ''.join(['-----BEGIN CERTIFICATE-----\n', x5c[0], '\n-----END CERTIFICATE-----\n'])
+                public_key =  load_pem_x509_certificate(cert.encode(), default_backend()).public_key()
+                OIDCLogin.MSFTKeys[token_header['kid']] = public_key
+                return public_key
+            except Exception:
+                return None
 
-    def validateMSFTJWT(self, token, audience=None, options=None):
+    @staticmethod
+    def ValidateMSFTJWT(token, audience=None, options=None):
         from cryptography.x509 import load_pem_x509_certificate
         from cryptography.hazmat.backends import default_backend
         token_header = jwt.get_unverified_header(token)
@@ -231,15 +260,19 @@ class OIDCLogin():
             # Create cert
             cert = ''.join(['-----BEGIN CERTIFICATE-----\n', x5c[0], '\n-----END CERTIFICATE-----\n'])
             public_key =  load_pem_x509_certificate(cert.encode(), default_backend()).public_key()
-            if audience is None:
-                audience=self.config['client_id']
             # audience is client id only for id_token, for access_token it is resoure being accessed or some location
             return jwt.decode(token, public_key, algorithms=[token_header['alg']], audience=audience, options=options)
             #return jwt.decode(token, public_key, algorithms=[token_header['alg']], options={'verify_aud': False}) # audience=self.config['client_id'])
         except Exception:
             return None
 
-    def validateGoogleJWT(self, token):
+    def validateMSFTJWT(self, token, audience=None, options=None):
+        if audience is None:
+            audience = self.config['client_id']
+        return OIDCLogin.ValidateMSFTJWT(token, audience=audience, options=options)
+
+    @staticmethod
+    def ValidateGoogleJWT(token):
         # just use the endpoint for now, look for keys
         req = "https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={0}".format(token)
         #print("Req: {0}".format(req))
@@ -248,6 +281,37 @@ class OIDCLogin():
             return json.loads(resp.content.decode())
         except Exception:
             return None
+
+    def validateGoogleJWT(self, token):
+        return OIDCLogin.ValidateGoogleJWT(token)
+
+    @staticmethod
+    def VerifyAndDecode(token, audience=None, verify=True):
+        # find issuer
+        decoded = None
+        if verify and audience is None:
+            raise ValueError('Invalid audience')
+        try:
+            token_header = jwt.get_unverified_header(token)
+            decoded = jwt.decode(token, options={'verify_signature': False})
+            if not verify:
+                return False, decoded
+            if decoded['iss'].startswith("https://login.microsoftonline.com/"):
+                publickey = OIDCLogin.getMSFTKey(token)
+                if publickey is None:
+                    return False, decoded
+                decoded = jwt.decode(token, publickey, algorithms=[token_header['alg']], audience=audience)
+                if (time.time() > decoded['exp']) or (audience is not None and audience != decoded['aud']):
+                    return False, decoded
+                return True, decoded
+            elif decoded['iss'] == "https://accounts.google.com":
+                resp = OIDCLogin.ValidateGoogleJWT(token)
+                verified = resp is not None
+                return verified, decoded
+            else:
+                return False, decoded
+        except Exception:
+            return False, decoded
 
     def decodeToken(self, token, verify=True, useProvider=True, audience=None, options=None):
         if not useProvider:
