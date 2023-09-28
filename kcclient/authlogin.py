@@ -286,7 +286,7 @@ class OIDCLogin():
         return OIDCLogin.ValidateGoogleJWT(token)
 
     @staticmethod
-    def VerifyAndDecode(token, audience=None, verify=True):
+    def VerifyAndDecode(token, audience=None, verify=True, options=None):
         # find issuer
         decoded = None
         if verify and audience is None:
@@ -300,7 +300,8 @@ class OIDCLogin():
                 publickey = OIDCLogin.getMSFTKey(token)
                 if publickey is None:
                     return False, decoded
-                decoded = jwt.decode(token, publickey, algorithms=[token_header['alg']], audience=audience)
+                decodedT = jwt.decode(token, publickey, algorithms=[token_header['alg']], audience=audience, options=options)
+                decoded = decodedT
                 if (time.time() > decoded['exp']) or (audience is not None and audience != decoded['aud']):
                     return False, decoded
                 return True, decoded
