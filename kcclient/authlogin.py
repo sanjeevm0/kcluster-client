@@ -144,7 +144,7 @@ class OIDCLogin():
             self.config['redirect_uri'], self.config['resource'], self.config['client_id'], self.config['client_secret'])
         return None, token_response, token_response['userId']
 
-    def getTokenFromRefreshTokenv1(self, refreshToken):
+    def getTokenFromRefreshTokenv1(self, refreshToken, _):
         import adal
         auth_context = adal.AuthenticationContext(self.config['token_uri'])
         token_response = auth_context.acquire_token_with_refresh_token(refreshToken,
@@ -416,12 +416,16 @@ def getCluster(args, cluster):
     else:
         return cluster
 
-def refreshToken(loginConfig, cluster, ns, secret):
-    existTokens = getExistTokensFromCluster(cluster, ns, secret)
+def getNewTokensFromRefresh(loginConfig, existTokens):
     version = existTokens['oauth_version']
     public = existTokens['oauth_publicclient']
     login = OIDCLogin(getLoginConfig(loginConfig, version), {}, None, version)
     _, tokens, _ = login.getTokenFromRefreshToken(existTokens['refresh_token'], public)
+    return tokens
+
+def refreshToken(loginConfig, cluster, ns, secret):
+    existTokens = getExistTokensFromCluster(cluster, ns, secret)
+    tokens = getNewTokensFromRefresh(loginConfig, existTokens)
     refreshTokenToCluster(cluster, ns, secret, tokens)
     return tokens
 
