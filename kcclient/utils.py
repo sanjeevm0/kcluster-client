@@ -2,6 +2,7 @@ import enum
 import time
 import random
 import string
+import uuid
 import subprocess
 import yaml
 import os
@@ -423,8 +424,13 @@ def diffA(a, b, keyToUse='name'):
 
 # if c = a-b, a = b+c
 # b is original, c is "patch"
-def patchA(b, c, keyToUse='name'):
-    if c is None:
+magicVal = uuid.uuid4()
+def patchA(b, c, keyToUse='name', removeNoneValue=True, allowNoneValue=False):
+    if allowNoneValue:
+        patchMagicVal = magicVal
+    else:
+        patchMagicVal = None
+    if c is patchMagicVal:
         return b
     cD = listToDict(c, keyToUse)
     if not isinstance(cD, dict):
@@ -432,10 +438,10 @@ def patchA(b, c, keyToUse='name'):
     if '__add__' in cD:
         return c['__add__']
     if '__del__' in cD:
-        return None
+        return patchMagicVal
     isList = isinstance(b, list)
     bD = listToDict(b, keyToUse)
-    if bD is None:
+    if bD is patchMagicVal:
         bD = {}
     if not isinstance(bD, dict):
         return c
@@ -445,13 +451,15 @@ def patchA(b, c, keyToUse='name'):
     keys.update(cD.keys())
     n = {}
     for k in keys:
-        patched = patchA(bD.get(k, None), cD.get(k, None), keyToUse)
+        if removeNoneValue and k in cD and cD[k] is patchMagicVal:
+            continue
+        patched = patchA(bD.get(k, patchMagicVal), cD.get(k, patchMagicVal), keyToUse, removeNoneValue, allowNoneValue)
         #print("k: {0}, patched: {1}".format(k, patched))
-        if patched is not None:
+        if patched is not patchMagicVal:
             n[k] = patched
     if isList:
         return dictToList(n, True, keyToUse)
-    else:    
+    else:
         return n
 
 def diffList(x1, x2, ignoreOrder=True, keyToUse='name'):
