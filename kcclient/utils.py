@@ -461,6 +461,19 @@ def patchA(b, c, keyToUse='name', removeNoneValue=True, allowNoneValue=False):
         return dictToList(n, True, keyToUse)
     else:
         return n
+    
+def updateWithDelete(x, updates, recursive=True):
+    keysTotal = set(x.keys())
+    keysTotal.update(updates.keys())
+    for k in keysTotal:
+        if k in updates and updates[k] is None:
+            if k in x:
+                del x[k]
+        elif recursive and (isinstance(x.get(k, None), dict) and isinstance(updates.get(k, None), dict)):
+            updateWithDelete(x[k], updates[k])
+        elif k in updates:
+            x[k] = updates[k]
+    return x
 
 def diffList(x1, x2, ignoreOrder=True, keyToUse='name'):
     if x1==x2:
