@@ -3,6 +3,7 @@ import logging.handlers
 import sys
 import os
 import glob
+import uuid
 from os import path
 from pathlib import Path
 
@@ -30,9 +31,14 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
         else:
             # use mode='a' to rollover on start, otherwise 'w' would overwrite the file without rolling over
             # maxBytes=10*1024*1024, backupCount=2, use maxBytes=0 to grow without limit
-            logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding)
-            if mode == 'w':
-                logfh.doRollover()
+            try:
+                logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding)
+                if mode == 'w':
+                    logfh.doRollover()
+            except Exception:
+                base, ext = os.path.splitext(filename)
+                filename = base + "-" + uuid.uuid4().hex + ext
+                logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding)
         logfh.setLevel(level)
         if fmt is not None:
             if isinstance(fmt, str):
