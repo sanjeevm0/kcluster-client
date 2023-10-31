@@ -1661,6 +1661,7 @@ class Heartbeat1():
         self.name = name
 
     def update(self):
+        log.logger.info('Heartbeat from {0} received'.format(self.name))
         self.last = time.time()
 
 class Heartbeat():
@@ -1670,14 +1671,20 @@ class Heartbeat():
         self.t = threading.Thread(target=self.run)
         self.t.daemon = True
         self.main = mainThreadEvent
+        self.started = False
 
     def register(self, name, checkinterval):
+        assert not self.started, "Heartbeats must be registered before start"
         h = Heartbeat1(name, checkinterval)
         self.registered.append(h)
         self.interval = min(self.interval, checkinterval)
         return h
 
     def start(self):
+        self.started = True
+        # update all heartbeats to current time prior to starting
+        for h in self.registered:
+            h.update()
         self.t.start()
 
     def run(self):
