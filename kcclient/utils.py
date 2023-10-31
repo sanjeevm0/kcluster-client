@@ -1653,3 +1653,41 @@ class Yaml:
 # a3 = {'a': 3, 'c': [4,3]}
 # utils.sync3(a,a2,a3)
 # utils.sync3(a,a2,a3,False)
+
+class Heartbeat1():
+    def __init__(self, name, interval):
+        self.last = time.time()
+        self.interval = interval
+        self.name = name
+
+    def update(self):
+        self.last = time.time()
+
+class Heartbeat():
+    def __init__(self, mainThreadEvent : threading.Event):
+        self.registered : list[Heartbeat1] = []
+        self.interval = 1000
+        self.t = threading.Thread(target=self.run)
+        self.t.daemon = True
+        self.main = mainThreadEvent
+
+    def register(self, name, checkinterval):
+        h = Heartbeat1(name, checkinterval)
+        self.registered.append(h)
+        self.interval = min(self.interval, checkinterval)
+        return h
+
+    def start(self):
+        self.t.start()
+
+    def run(self):
+        while True:
+            time.sleep(self.interval)
+            now = time.time()
+            for h in self.registered:
+                time_passed = now - h.last
+                if time_passed > h.interval:
+                    logger.error('Heartbeat {0} not received for {1} seconds - exiting'.format(h.name, time_passed))
+                    self.main.set()
+                    exit(1)
+
