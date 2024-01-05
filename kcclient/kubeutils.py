@@ -903,7 +903,7 @@ def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finish
     listerFn, watcherFn = _getListerAndWatcherFromClient(lister, **kwargs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
     t.daemon = True
-    t.selfCtx['watch_args'] = kwargs.get('watch_args', None)
+    t.selfCtx['watch_args'] = kwargs.get('watch_args', {})
     _watcherThreadStart(t, finisher, **kwargs)
     return t
 
