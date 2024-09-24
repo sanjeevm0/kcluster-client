@@ -2,7 +2,6 @@ import enum
 import time
 import random
 import string
-import uuid
 import subprocess
 import yaml
 import os
@@ -15,7 +14,7 @@ from jinja2 import Environment, FileSystemLoader, Template
 import base64
 import hashlib
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 try:
     import importlib.resources
     importlibmodule = importlib.resources
@@ -35,7 +34,10 @@ def getHome():
 
 import log
 import logging
-logger = log.start_log("{0}/logs/utils.log".format(getHome()), logging.DEBUG, logging.INFO, 'w', 'utilslog')
+try:
+    logger = log.start_log("{0}/logs/utils.log".format(getHome()), logging.DEBUG, logging.INFO, 'w', 'utilslog')
+except Exception:    
+    logger = log.start_log("{0}/logs/utils{1}.log".format(getHome(), datetime.now(tz=timezone.utc).strftime('%Y_%m_%d_%H_%M_%S')), logging.DEBUG, logging.INFO, 'w', 'utilslog')
 
 def setLogger(_logger):
     global logger
@@ -337,145 +339,7 @@ def cmp(key, x1, x2):
     else:
         return True # not in either
 
-# convert list to dict using keyToUse
-def listToDict(x, keyToUse='name'):
-    if isinstance(x, list):
-        d = {}
-        for i in x:
-            if not isinstance(i, dict):
-                return x # return original list
-            if keyToUse in i and i[keyToUse] not in d:
-                d[i[keyToUse]] = i
-            else:
-                return x # return original list
-        return d
-    else:
-        return x
-
-def dictToList(x, skipEmpty=True, keyToUse='name'):
-    if isinstance(x, dict):
-        l = []
-        for k, v in x.items():
-            if skipEmpty and (v is None or v=={}):
-                continue
-            if isinstance(v, dict):
-                c = copy.deepcopy(v)
-                v.update({keyToUse: k})
-                l.append(v)
-            else:
-                return x # return original dict
-        return l
-    else:
-        return x
-
-def getNonDictDiff(a, b):
-    dFull = {'__add__': a, '__del__': b}
-    if a is None:
-        return {'__del__': b}, dFull
-    else:
-        return a, dFull
-
-# returns a - b & "full diff"
-def diffA(a, b, keyToUse='name'):
-    if not isinstance(a, type(b)):
-        return getNonDictDiff(a, b)
-    aD = listToDict(a, keyToUse)
-    bD = listToDict(b, keyToUse)
-    isList = isinstance(a, list)
-    if not isinstance(aD, dict) or not isinstance(bD, dict):
-        if a==b:
-            return None, None
-        else:
-            return getNonDictDiff(a, b)
-    else: # either dict to begin with or convertible
-        dPart = {}
-        dFull = {}
-        keys = set(aD.keys())
-        keys.update(bD.keys())
-        for k in keys:
-            diffP , diffF = diffA(aD.get(k, None), bD.get(k, None), keyToUse)
-            #print("k: {0}, diff: {1} diffulll: {2}".format(k, diffP, diffF))
-            if diffP is None:
-                continue
-            dFull[k] = diffF
-            if not isinstance(diffP, dict):
-                dPart[k] = diffP
-            elif '__add__' in diffP and diffP['__add__'] is not None:
-                dPart[k] = diffP['__add__']
-            elif '__del__' in diffP and diffP['__del__'] is not None:
-                dPart[k] = {'__del__': diffP['__del__']}
-                # if isinstance(diffP['__del__'], dict):
-                #     dPart[k] = diffP['__del__']
-                #     dPart[k].update({'__del__': True})
-                # else:
-                #     dPart[k] = {'__del__': diffP['__del__']}
-            else:
-                dPart[k] = diffP
-        #print(dPart)
-        #print(dFull)
-        if len(dPart)==0:
-            dPart = None
-        if len(dFull)==0:
-            dFull = None
-        if isList:
-            return dictToList(dPart, True, keyToUse), dictToList(dFull, True, keyToUse)
-        else:
-            return dPart, dFull
-
-# if c = a-b, a = b+c
-# b is original, c is "patch"
-magicVal = uuid.uuid4()
-def patchA(b, c, keyToUse='name', removeNoneValue=True, allowNoneValue=False):
-    if allowNoneValue:
-        patchMagicVal = magicVal
-    else:
-        patchMagicVal = None
-    if c is patchMagicVal:
-        return b
-    cD = listToDict(c, keyToUse)
-    if not isinstance(cD, dict):
-        return c
-    if '__add__' in cD:
-        return c['__add__']
-    if '__del__' in cD:
-        return patchMagicVal
-    isList = isinstance(b, list)
-    bD = listToDict(b, keyToUse)
-    if bD is patchMagicVal:
-        bD = {}
-    if not isinstance(bD, dict):
-        return c
-        #print("b: {0}, c: {1}".format(b, c))
-        #raise ValueError("Invalid patch")
-    keys = set(bD.keys())
-    keys.update(cD.keys())
-    n = {}
-    for k in keys:
-        if removeNoneValue and k in cD and cD[k] is patchMagicVal:
-            continue
-        patched = patchA(bD.get(k, patchMagicVal), cD.get(k, patchMagicVal), keyToUse, removeNoneValue, allowNoneValue)
-        #print("k: {0}, patched: {1}".format(k, patched))
-        if patched is not patchMagicVal:
-            n[k] = patched
-    if isList:
-        return dictToList(n, True, keyToUse)
-    else:
-        return n
-    
-def updateWithDelete(x, updates, recursive=True):
-    keysTotal = set(x.keys())
-    keysTotal.update(updates.keys())
-    for k in keysTotal:
-        if k in updates and updates[k] is None:
-            if k in x:
-                del x[k]
-        elif recursive and (isinstance(x.get(k, None), dict) and isinstance(updates.get(k, None), dict)):
-            updateWithDelete(x[k], updates[k])
-        elif k in updates:
-            x[k] = updates[k]
-    return x
-
-def diffList(x1, x2, ignoreOrder=True, keyToUse='name'):
+def diffList(x1, x2, ignoreOrder=True):
     if x1==x2:
         return True, None
 
@@ -491,52 +355,25 @@ def diffList(x1, x2, ignoreOrder=True, keyToUse='name'):
         else:
             diffs.extend(x2[len(x1):])
     else:
-        foundA = []
-        subDiffA = []
-        # array of length x2 with False
-        used = [False for i in range(len(x2))]
+        x2C = copy.deepcopy(x2)
         for j, x11 in enumerate(x1):
             found = False
-            subDiffB = [None for i in range(len(x2))]
-            for i, x21 in enumerate(x2):
-                if used[i]:
-                    continue
+            for i, x21 in enumerate(x2C):
                 if x11 == x21:
                     found = True
-                    used[i] = True
+                    x2C.pop(i)
                     break
                 (same, subDiff) = diff(x11, x21, ignoreOrder)
                 if same:
                     found = True
-                    used[i] = True
+                    x2C.pop(i)
                     break
-                subDiffB[i] = subDiff
-            foundA.append(found)
-            subDiffA.append(subDiffB)
-        for j, x11 in enumerate(x1):
-            if foundA[j]:
-                continue
-            found = False
-            for i, subDiff in enumerate(subDiffA[j]):
-                if used[i]:
-                    continue
-                if (isinstance(x11, dict) and isinstance(x2[i], dict) and
-                    keyToUse in x11 and keyToUse in x2[i] and x11[keyToUse]==x2[i][keyToUse]):
-                    subDiff.update({keyToUse: x11[keyToUse]})
-                    diffs.append(subDiff)
-                    used[i] = True
-                    found = True
-                    break
-            # try to match index
-            if not found and len(x2) >= (j+1) and subDiffA[j][j] is not None and not used[j]:
-                diffs.append(subDiffA[j][j])
-                found = True
-                used[j] = True
+                if j==i:
+                    subDiffJ = subDiff
             if not found:
-                diffs.append(x11)
-        for i, x21 in enumerate(x2):
-            if not used[i]:
-                diffs.append(x21)
+                diffs.append(subDiffJ)
+                x2C.pop(j)
+        diffs.extend(x2C) # whatever is leftover and unused
 
     if len(diffs) > 0:
         return False, diffs
@@ -560,12 +397,12 @@ def diffDict(x1, x2, ignoreOrder=True):
     else:
         return True, None
 
-def diff(x1, x2, ignoreOrder=True, keyToUse='name'):
+def diff(x1, x2, ignoreOrder=True):
     # if type(x1) != type(x2):
     #     return False, x1
 
     if isinstance(x1, list) and isinstance(x2, list):
-        return diffList(x1, x2, ignoreOrder, keyToUse)
+        return diffList(x1, x2, ignoreOrder)
 
     if isinstance(x1, dict) and isinstance(x2, dict):
         return diffDict(x1, x2, ignoreOrder)
@@ -598,6 +435,9 @@ def diffJSON(xN, xO):
     else:
         return diff
 
+convt_list = '46c7d124-17aa-4852-a040-be3d92c53e0b'
+
+# list of dicts becomes dict of dicts
 def convtToDic(c, commonKeys):
     cN = {}
     if isinstance(c, dict):
@@ -610,7 +450,7 @@ def convtToDic(c, commonKeys):
         for v in c:
             if isinstance(v, list):
                 print("Don't know")
-                raise Exception("Can't handle {0}".format(c))
+                raise Exception("Can't handle {0} - list of lists".format(c))
             elif isinstance(v, dict):
                 found = True
                 for k in commonKeys:
@@ -622,9 +462,31 @@ def convtToDic(c, commonKeys):
                     raise Exception("Can't find common key in {0}".format(v))
             else:
                 cN[v] = v
+        cN[convt_list] = True
     else:
         raise Exception("Should be list or dict")
     return cN
+
+def invConvtToDic(c):
+    if not isinstance(c, dict):
+        return copy.deepcopy(c)
+    if convt_list in c:
+        cN = []
+        for k, v in c.items():
+            if k != convt_list:
+                cN.append(invConvtToDic(v))
+    else:
+        cN = {}
+        for k, v in c.items():
+            cN[k] = invConvtToDic(v)
+    return cN
+
+def mergeall(*args, keyToUse='name'):
+    assert len(args) > 0
+    x = convtToDic(args[0], [keyToUse])
+    for i in range(1, len(args)):
+        x = deepmerge(x, convtToDic(args[i], [keyToUse]))
+    return invConvtToDic(x)
 
 def dictUse(key, x):
     if key in x:
@@ -1128,7 +990,7 @@ def isGPUMachine():
 
 def linuxVer():
     ver = " ".join(getoutput("lsb_release -a").split())
-    m = re.match(".*Description:\s+(.* LTS)", ver)
+    m = re.match(r".*Description:\s+(.* LTS)", ver)
     return m.group(1).strip()
 
 def getContents(user, machine, file):
@@ -1525,7 +1387,7 @@ def smartLoad(x, toDict=False):
     return _smartLoad(None, x, lambda key : key, lambda key, val : val, {}, toDict)
 
 def replaceSave(old, new):
-    dateStr = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S')
+    dateStr = datetime.now(tz=timezone.utc).strftime('%Y_%m_%d_%H_%M_%S')
     a, b = os.path.splitext(old)
     dst = '{0}.{1}{2}'.format(a, dateStr, b)
     #print("DST: {0}".format(dst))
@@ -1653,48 +1515,3 @@ class Yaml:
 # a3 = {'a': 3, 'c': [4,3]}
 # utils.sync3(a,a2,a3)
 # utils.sync3(a,a2,a3,False)
-
-class Heartbeat1():
-    def __init__(self, name, interval):
-        self.last = time.time()
-        self.interval = interval
-        self.name = name
-
-    def update(self):
-        log.logger.info('Heartbeat from {0} received'.format(self.name))
-        self.last = time.time()
-
-class Heartbeat():
-    def __init__(self, mainThreadEvent : threading.Event):
-        self.registered : list[Heartbeat1] = []
-        self.interval = 1000
-        self.t = threading.Thread(target=self.run)
-        self.t.daemon = True
-        self.main = mainThreadEvent
-        self.started = False
-
-    def register(self, name, checkinterval):
-        assert not self.started, "Heartbeats must be registered before start"
-        h = Heartbeat1(name, checkinterval)
-        self.registered.append(h)
-        self.interval = min(self.interval, checkinterval)
-        return h
-
-    def start(self):
-        self.started = True
-        # update all heartbeats to current time prior to starting
-        for h in self.registered:
-            h.update()
-        self.t.start()
-
-    def run(self):
-        while True:
-            time.sleep(self.interval)
-            now = time.time()
-            for h in self.registered:
-                time_passed = now - h.last
-                if time_passed > h.interval:
-                    logger.error('Heartbeat {0} not received for {1} seconds - exiting'.format(h.name, time_passed))
-                    self.main.set()
-                    exit(1)
-

@@ -720,17 +720,9 @@ def hasParent(o):
             return True
     return False
 
-def getRestartWatchTime(kwargs):
-    return kwargs.get('watch_args', {}).get('restart_watch', 60)
-
 def _getWatchCtx(lister, **kwargs):
     w = watch.Watch()
-    expireTime = getRestartWatchTime(kwargs) # every minute restart watch, bugs in urllib prevent broken connection from terminating watch
-    log.logger.info("Restart Watch Every: {0} seconds".format(expireTime))
-    kwargsCopy = copy.deepcopy(kwargs)
-    kwargsCopy.pop('watch_args', None)
-    kwargs = kwargsCopy
-    #expireTime = 60 # every minute restart watch, bugs in urllib prevent broken connection from terminating watch
+    expireTime = 60 # every minute restart watch, bugs in urllib prevent broken connection from terminating watch
     if 'resource_version' in kwargs and kwargs['resource_version'] is None:
         kwargs.pop('resource_version') # unset it
     if 'timeout_seconds' not in kwargs:
@@ -753,7 +745,7 @@ def getResourceVersion(obj):
     raise Exception("No resource version found in object")
 
 def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda : False):
-    heartbeat : utils.Heartbeat1 = thread.selfCtx.get('watch_args', {}).get('heartbeat', None)
+    #print("IN WATCH AND DO")
     doinit = thread.selfCtx.get('doinit', True)
     maxResVer = thread.selfCtx.get('resource_version', None)
     convert = thread.sharedCtx.get('convert', True)
@@ -848,14 +840,10 @@ def _watchAndDo(thread : ThreadFnR, listerFn, watcherFn, doFn, stopLoop = lambda
         (time.time()-thread.selfCtx['thread_start_time']) < thread.selfCtx['timeout_seconds']):
         logger.info("WATCH THREAD {0}-{1} STOPS BYITSELF - REPEAT LOOP".format(thread.name, thread.threadID))
         thread.selfCtx['repeat'] = True
-        if heartbeat is not None:
-            heartbeat.update()
     #time.sleep(20) # sleep only for testing if trackObj correctly handles objects deleted during thread restarts
 
 def _getListerAndWatcher(fn, **kwargs):
-    kwargCopy = copy.deepcopy(kwargs)
-    kwargCopy.pop('watch_args', None)
-    listerFn = lambda : fn(**kwargCopy)
+    listerFn = lambda : fn(**kwargs)
     watcherFn = lambda rv : _getWatchCtx(fn, resource_version=rv, **kwargs)
     return listerFn, watcherFn
 
@@ -872,7 +860,6 @@ def _getListerAndWatcherFromClient(lister, **kwargs):
         clusterId = clientArgs.pop('cluster_id') # raise error if not found
         logger.debug("Start watch for cluster {0}".format(clusterId))
         _, clientMethod = getClientForMethod(clusterId, lister, True)
-    log.logger.info(remArgs)
     listerFn, watcherFn = _getListerAndWatcher(clientMethod, **remArgs)
     return listerFn, watcherFn
 
@@ -902,8 +889,6 @@ def WatchObjThread(threadId, name, sharedCtx, callback, stopLoop, lister, finish
     #print("IN WATCH OBJ")
     listerFn, watcherFn = _getListerAndWatcherFromClient(lister, **kwargs)
     t = ThreadFnR(threadId, name, sharedCtx, _watchAndDo, listerFn, watcherFn, callback, stopLoop)
-    t.daemon = True
-    t.selfCtx['watch_args'] = kwargs.get('watch_args', {})
     _watcherThreadStart(t, finisher, **kwargs)
     return t
 
@@ -1665,10 +1650,10 @@ class Cluster():
         elif method.endswith("_service"):
             obj = "service"
             convert = True
-        elif method.endswith("_deployment") or method.endswith("_deployment_scale"):
+        elif method.endswith("_deployment"):
             obj = "deployment"
             convert = True
-        elif method.endswith("_stateful_set") or method.endswith("_stateful_set_scale"):
+        elif method.endswith("_stateful_set"):
             obj = "statefulset"
             convert = True
         else:

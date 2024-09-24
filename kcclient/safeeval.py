@@ -18,8 +18,6 @@ def isSafeExpr(x, msgs, allowVars):
             if not isSafeExpr(t, msgs, allowVars):
                 return False
         return True
-    elif tp==ast.Constant:
-        return True
     elif tp==ast.Expr:
         return isSafeExpr(x.value, msgs, allowVars)
     elif tp==ast.BinOp:
