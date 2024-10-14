@@ -1693,13 +1693,14 @@ class Heartbeat1():
         self.last = time.time()
 
 class Heartbeat():
-    def __init__(self, mainThreadEvent : threading.Event|None=None, doneCb=None):
+    def __init__(self, mainThreadEvent : threading.Event|None=None, doneCb=None, forceExit=False):
         self.registered : list[Heartbeat1] = []
         self.interval = 1000
         self.t = threading.Thread(target=self.run)
         self.t.daemon = True
         self.main = mainThreadEvent
         self.doneCb = doneCb # callback when done
+        self.forceExit = forceExit
         self.started = False
 
     def register(self, name, checkinterval):
@@ -1728,4 +1729,5 @@ class Heartbeat():
                         self.main.set()
                     if self.doneCb is not None:
                         self.doneCb()
-                    exit(1)
+                    if self.forceExit:
+                        sys.exit(1)
