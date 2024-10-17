@@ -948,13 +948,13 @@ def _getValK(x, key):
 def getValK(x, key):
     return _getValK(x, copy.deepcopy(key))
 
-def getVal(x, key, splitChar="."):
+def getVal(x, key, splitChar : str|None = "."):
     if splitChar is None:
         return _getValK(x, copy.deepcopy(key)) # key is already array of splits
     else:
         return _getValK(x, key.strip().split(splitChar))
 
-def getValDef(x, key, defVal={}, splitChar="."):
+def getValDef(x, key, defVal={}, splitChar : str|None = "."):
     ret = getVal(x, key, splitChar)
     if ret is None:
         return defVal
@@ -1002,7 +1002,7 @@ def _setValK(x, key, v):
 def setValK(x, key, v):
     return _setValK(x, copy.deepcopy(key), v)
 
-def setVal(x, key, v, splitChar="."):
+def setVal(x, key, v, splitChar : str|None = "."):
     if splitChar is not None:
         key = key.strip().split(splitChar)
     else:
@@ -1011,27 +1011,27 @@ def setVal(x, key, v, splitChar="."):
     _setValK(x, key, v)
     return x
 
-def addToVal(x, key, v, splitChar="."):
+def addToVal(x, key, v, splitChar : str|None = "."):
     curVal = getValDef(x, key, 0, splitChar)
     curVal += v
     return setVal(x, key, curVal, splitChar)
 
-def appendToVal(x, key, v, splitChar="."):
+def appendToVal(x, key, v, splitChar : str|None = "."):
     curVal = getValDef(x, key, [], splitChar)
     curVal.append(v)
     return setVal(x, key, curVal, splitChar)
 
-def extendToVal(x, key, v, splitChar="."):
+def extendToVal(x, key, v, splitChar : str|None = "."):
     curVal = getValDef(x, key, [], splitChar)
     curVal.extend(v)
     return setVal(x, key, curVal, splitChar)
 
-def updateToVal(x, key, v, splitChar="."):
+def updateToVal(x, key, v, splitChar : str|None = "."):
     curVal = getValDef(x, key, {}, splitChar)
     curVal.update(v)
     return setVal(x, key, curVal, splitChar)
 
-def popFromVal(x, key, v, splitChar=".", defVal=[]):
+def popFromVal(x, key, v, splitChar : str|None =".", defVal=[]):
     if isinstance(v, list) and len(v)==0:
         return None
     if not isinstance(v, list):

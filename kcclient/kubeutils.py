@@ -1160,7 +1160,7 @@ class ObjTracker:
         except Exception as ex:
             logger.error("ERROR: {0} {1}".format(ex, traceback.format_exc()))
 
-    def setDefaultCallback(self, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
+    def setDefaultCallback(self, event : threading.Event|None=None, predicate=None, replacements={}, updateObj=False,
         addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True):
 
         self.event = event
@@ -1525,7 +1525,7 @@ class Cluster():
             return ObjTracker(*args, **kwargs, clusterName=self.name, servers=self.serversFixed, serverFile=self.serverFileFixed,
                 base=self.base, ca=self.ca, cert=self.cert, key=self.key)
 
-    def addTracker(self, name, watchMethod, event : threading.Event=None, predicate=None, replacements={}, updateObj=False,
+    def addTracker(self, name, watchMethod, event : threading.Event|None=None, predicate=None, replacements={}, updateObj=False,
         addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True, writeBackUpdates=False, 
         timeout_seconds=0, stopMethod = lambda : False, sharedCtx = None, **kwargs):
 
