@@ -39,13 +39,15 @@ def start_log_args(args):
     global logger
     logfmt = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     print("Starting log {0}".format(args.log))
-    start_log(args.log, level=args.v, prtLogLevel=args.vp, maxBytes=args.logsize, 
-              fmt=logfmt, backupCount=args.backup) # grow without limit
-    return args.log
+    _, filename = start_log(args.log, level=args.v, prtLogLevel=args.vp, maxBytes=args.logsize, 
+                            fmt=logfmt, backupCount=args.backup) # grow without limit
+    return filename
 
 # if seeing double print messages, set logger.propagate to False as someone may have added a handler to the root logger
-def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w', loggerName="logcommon-d3ab1c", backupCount=2,
-              fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False, encoding='utf-8', propagate=True) -> logging.Logger:
+def start_log(filename : str, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w',
+              loggerName="logcommon-d3ab1c", backupCount=2,
+              fmt=None, prtFmt=None, maxBytes=10*1024*1024, overwrite=False, encoding='utf-8', propagate=True) -> \
+                tuple[logging.Logger, str]:
     global logger
     if loggerName not in loggers or overwrite:
         logger = logging.getLogger(loggerName)
@@ -67,7 +69,7 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
             except Exception:
                 base, ext = os.path.splitext(filename)
                 filename = base + "-" + uuid.uuid4().hex + ext
-                print(filename)
+                print("Starting log {0}".format(filename))
                 logfh = logging.handlers.RotatingFileHandler(filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding)
         logfh.setLevel(level)
         if fmt is not None:
@@ -83,7 +85,7 @@ def start_log(filename, level=logging.INFO, prtLogLevel=logging.WARNING, mode='w
             logprt.setFormatter(prtFmt)
         logger.addHandler(logprt)
         loggers[loggerName] = logger
-    return loggers[loggerName]
+    return loggers[loggerName], filename
 
 def flush_logs():
     for logger in loggers.values():
