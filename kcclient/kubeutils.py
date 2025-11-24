@@ -1145,7 +1145,6 @@ class ObjTracker:
         self.replacements = {}
         self.updaetObj = False
         self.addlCallback = None
-        self.addlCallbackO = None
         self.useUid = False
         self.trackedObjs = {}
 
@@ -1162,37 +1161,34 @@ class ObjTracker:
             logger.error("ERROR: {0} {1}".format(ex, traceback.format_exc()))
 
     def setDefaultCallback(self, event : threading.Event|None=None, predicate=None, replacements={}, updateObj=False,
-        addlCallback=None, addlCallbackO=None, callbackLock=None, useUid=False, setEventOnDelete=True):
+        addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True):
 
         self.event = event
         self.predicate = predicate
         self.replacements = replacements
         self.updateObj = updateObj
         self.addlCallback = addlCallback
-        self.addlCallbackO = addlCallbackO
         self.useUid = useUid
         self.setEventOnDelete = setEventOnDelete
         # update the callback
         self.callback = partial(ObjTracker.TryCb, self.standardCallback, callbackLock)
 
     def standardCallback(self, evType, obj, init, objPrev):
-        process, deleted, objD, objO = ObjTracker.ProcessObj2(self.predicate, evType, obj, self.trackedObjs,
+        process, deleted, objD = ObjTracker.ProcessObj(self.predicate, evType, obj, self.trackedObjs,
             replacements=self.replacements, updateObj=self.updateObj, useUid=self.useUid, convert=self.convert)
         if not process and evType!="none":
             return # no need to process, predicate not met
         if self.addlCallback is not None:
             self.addlCallback(evType, deleted, objD)
-        if self.addlCallbackO is not None:
-            self.addlCallbackO(evType, deleted, objO)
         if self.event is not None and (evType=="none" or self.setEventOnDelete or not deleted):
             self.event.set()
 
     # A standard callback which keeps objects in "objs" by key (using toKey)
     # returns (processed, deleted) tuple
     @staticmethod
-    def ProcessObj2(predicate, evType, obj, objs, replacements={}, updateObj=False, useUid=False, convert=True):
+    def ProcessObj(predicate, evType, obj, objs, replacements={}, updateObj=False, useUid=False, convert=True):
         if obj is None:
-            return False, False, None, None
+            return False, False, None
 
         objO = copy.deepcopy(obj)
         obj = ToYaml(obj, replacements, convert=convert) # replace _ip_ with _IP_ (e.g. for IP addresses)
@@ -1210,22 +1206,17 @@ class ObjTracker:
 
         if not predicate(obj):
             objs.pop(key, None)
-            return False, False, obj, objO
+            return False, False, obj
 
         if utils.getValDef(obj, ['metadata', 'deletionTimestamp'], None, None) is not None or evType=="deleted":
             objs.pop(key, None)
-            return True, True, obj, objO
+            return True, True, obj
 
         if updateObj:
             utils.updateToVal(objs, key, copy.deepcopy(obj))
         else:
             objs[key] = copy.deepcopy(obj)
-        return True, False, obj, objO
-
-    @staticmethod
-    def ProcessObj(*args, **kwargs):
-        processed, deleted, objD, _ = ObjTracker.ProcessObj2(*args, **kwargs)
-        return processed, deleted, objD
+        return True, False, obj
 
     # init=True implies performing init
     def trackObj(self, event, obj, init):
@@ -1535,20 +1526,16 @@ class Cluster():
                 base=self.base, ca=self.ca, cert=self.cert, key=self.key)
 
     def addTracker(self, name, watchMethod, event : threading.Event|None=None, predicate=None, replacements={}, updateObj=False,
-        addlCallbackD=None, addlCallbackO=None, callbackLock=None, useUid=False, setEventOnDelete=True, writeBackUpdates=False, 
+        addlCallback=None, callbackLock=None, useUid=False, setEventOnDelete=True, writeBackUpdates=False, 
         timeout_seconds=0, stopMethod = lambda : False, sharedCtx = None, **kwargs):
 
         if sharedCtx is None:
             sharedCtx = {}
-
-        if len(self.trackers) == 0:
-            writeBackUpdates = True # only write back updates if this is the first tracker
-
+ 
         writeServerFile = (len(self.trackers)==0)
         t = self.tracker(sharedCtx, stopMethod, watchMethod, callback=None, writeServerFile=writeServerFile,
             timeout_seconds=timeout_seconds, **kwargs)
-        t.setDefaultCallback(event, predicate, replacements, updateObj, addlCallbackD, 
-                             addlCallbackO, callbackLock, useUid, setEventOnDelete)
+        t.setDefaultCallback(event, predicate, replacements, updateObj, addlCallback, callbackLock, useUid, setEventOnDelete)
         logger.info("Add tracker with name {0} for method {1}".format(name, watchMethod))
         self.trackers[name] = (t, {'writeBackUpdates': writeBackUpdates})
         return t

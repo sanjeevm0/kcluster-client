@@ -33,6 +33,15 @@ def getHome():
     else:
         return ''
 
+def getLogDir():
+    if 'LOGDIR' in os.environ:
+        logDir = os.environ['LOGDIR']
+    else:
+        logDir = "{0}/logs".format(getHome())
+    if not os.path.exists(logDir):
+        os.makedirs(logDir, exist_ok=True)
+    return logDir   
+
 import log
 import logging
 try:
