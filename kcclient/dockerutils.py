@@ -46,6 +46,7 @@ def dockerpullimage(image):
     logger.info("Docker pull output: {0}".format(out.decode('utf-8')))
 
 def getdockerentrypoint(image):
+    dockerpullimage(image) # ensure image is present
     logger.info("Getting docker entrypoint for image: {0}".format(image))
     out = subprocess.check_output('docker inspect {0}'.format(image), shell=True, stderr=subprocess.STDOUT)
     inspect = json.loads(out.decode('utf-8'))
