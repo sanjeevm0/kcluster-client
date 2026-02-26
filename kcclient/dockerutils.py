@@ -50,8 +50,8 @@ def getdockerentrypoint(image):
     logger.info("Getting docker entrypoint for image: {0}".format(image))
     out = subprocess.check_output('docker inspect {0}'.format(image), shell=True, stderr=subprocess.STDOUT)
     inspect = json.loads(out.decode('utf-8'))
-    entrypoint = inspect[0]['Config']['Entrypoint']
-    cmd = inspect[0]['Config']['Cmd']
+    entrypoint = inspect[0]['Config'].get('Entrypoint', [])
+    cmd = inspect[0]['Config'].get('Cmd', [])
     logger.info("Docker entrypoint: {0}, cmd: {1}".format(entrypoint, cmd))
     return entrypoint, cmd
 
