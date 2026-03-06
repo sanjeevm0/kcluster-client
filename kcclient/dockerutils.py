@@ -46,14 +46,23 @@ def dockerpullimage(image):
     logger.info("Docker pull output: {0}".format(out.decode('utf-8')))
 
 def getdockerentrypoint(image):
-    dockerpullimage(image) # ensure image is present
-    logger.info("Getting docker entrypoint for image: {0}".format(image))
-    out = subprocess.check_output('docker inspect {0}'.format(image), shell=True, stderr=subprocess.STDOUT)
-    inspect = json.loads(out.decode('utf-8'))
-    entrypoint = inspect[0]['Config'].get('Entrypoint', [])
-    cmd = inspect[0]['Config'].get('Cmd', [])
-    logger.info("Docker entrypoint: {0}, cmd: {1}".format(entrypoint, cmd))
-    return entrypoint, cmd
+    try:
+        logger.info("Pulling docker image to get entrypoint: {0}".format(image))
+        dockerpullimage(image) # ensure image is present
+    except Exception as e:
+        logger.error("Error pulling docker image: {0}".format(e))
+        # continue trying with an existing image if it exists
+    try:
+        logger.info("Getting docker entrypoint for image: {0}".format(image))
+        out = subprocess.check_output('docker inspect {0}'.format(image), shell=True, stderr=subprocess.STDOUT)
+        inspect = json.loads(out.decode('utf-8'))
+        entrypoint = inspect[0]['Config'].get('Entrypoint', [])
+        cmd = inspect[0]['Config'].get('Cmd', [])
+        logger.info("Docker entrypoint: {0}, cmd: {1}".format(entrypoint, cmd))
+        return entrypoint, cmd
+    except Exception as e:
+        logger.error("Error inspecting docker image: {0} - using empty entrypoint and cmd".format(e))
+        return [], []
 
 if __name__ == "__main__":
     import argparse

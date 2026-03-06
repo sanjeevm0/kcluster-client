@@ -22,9 +22,10 @@ def setlogger(newlogger):
     dockerutils.setlogger(newlogger)
 
 def changeEntryPoint(cont, prefix, suffix):
-    entrypoint, cmd = dockerutils.getdockerentrypoint(cont['image'])
-    # entrypoint is "command", cmd is "args"
     command = cont.get('command', None)
+    if command is None: # if command is not None, cmd cannot be None since we set it to []
+        # "entrypoint" in docker is "command" in k8s, "cmd" in docker is "args" in k8s
+        entrypoint, cmd = dockerutils.getdockerentrypoint(cont['image'])
     # if command is specified, then "args" (cmd) from Dockerfile does not matter
     if command is not None:
         cmd = []
